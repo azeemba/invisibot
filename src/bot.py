@@ -9,8 +9,7 @@ from util.sequence import Sequence, ControlStep
 from util.vec import Vec3
 
 
-class MyBot(BaseAgent):
-
+class Invisibot(BaseAgent):
     def __init__(self, name, team, index):
         super().__init__(name, team, index)
         self.active_sequence: Sequence = None
@@ -44,17 +43,31 @@ class MyBot(BaseAgent):
 
         if car_location.dist(ball_location) > 1500:
             # We're far away from the ball, let's try to lead it a little bit
-            ball_prediction = self.get_ball_prediction_struct()  # This can predict bounces, etc
-            ball_in_future = find_slice_at_time(ball_prediction, packet.game_info.seconds_elapsed + 2)
+            ball_prediction = (
+                self.get_ball_prediction_struct()
+            )  # This can predict bounces, etc
+            ball_in_future = find_slice_at_time(
+                ball_prediction, packet.game_info.seconds_elapsed + 2
+            )
             target_location = Vec3(ball_in_future.physics.location)
-            self.renderer.draw_line_3d(ball_location, target_location, self.renderer.cyan())
+            self.renderer.draw_line_3d(
+                ball_location, target_location, self.renderer.cyan()
+            )
         else:
             target_location = ball_location
 
         # Draw some things to help understand what the bot is thinking
         self.renderer.draw_line_3d(car_location, target_location, self.renderer.white())
-        self.renderer.draw_string_3d(car_location, 1, 1, f'Speed: {car_velocity.length():.1f}', self.renderer.white())
-        self.renderer.draw_rect_3d(target_location, 8, 8, True, self.renderer.cyan(), centered=True)
+        self.renderer.draw_string_3d(
+            car_location,
+            1,
+            1,
+            f"Speed: {car_velocity.length():.1f}",
+            self.renderer.white(),
+        )
+        self.renderer.draw_rect_3d(
+            target_location, 8, 8, True, self.renderer.cyan(), centered=True
+        )
 
         if 750 < car_velocity.length() < 800:
             # We'll do a front flip if the car is moving at a certain speed.
@@ -69,16 +82,22 @@ class MyBot(BaseAgent):
 
     def begin_front_flip(self, packet):
         # Send some quickchat just for fun
-        self.send_quick_chat(team_only=False, quick_chat=QuickChatSelection.Information_IGotIt)
+        self.send_quick_chat(
+            team_only=False, quick_chat=QuickChatSelection.Information_IGotIt
+        )
 
         # Do a front flip. We will be committed to this for a few seconds and the bot will ignore other
         # logic during that time because we are setting the active_sequence.
-        self.active_sequence = Sequence([
-            ControlStep(duration=0.05, controls=SimpleControllerState(jump=True)),
-            ControlStep(duration=0.05, controls=SimpleControllerState(jump=False)),
-            ControlStep(duration=0.2, controls=SimpleControllerState(jump=True, pitch=-1)),
-            ControlStep(duration=0.8, controls=SimpleControllerState()),
-        ])
+        self.active_sequence = Sequence(
+            [
+                ControlStep(duration=0.05, controls=SimpleControllerState(jump=True)),
+                ControlStep(duration=0.05, controls=SimpleControllerState(jump=False)),
+                ControlStep(
+                    duration=0.2, controls=SimpleControllerState(jump=True, pitch=-1)
+                ),
+                ControlStep(duration=0.8, controls=SimpleControllerState()),
+            ]
+        )
 
         # Return the controls associated with the beginning of the sequence so we can start right away.
         return self.active_sequence.tick(packet)
