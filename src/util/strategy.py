@@ -43,7 +43,7 @@ class BallChaseStrat(BaseStrategy):
     def tick(self, car_state: Physics, packet: GameTickPacket, field_boost) -> StrategyResult:
         ball_location = packet.game_ball.physics.location
 
-        boost = False
+        boost = True
         goal = StrategyGoal(Vec3(ball_location), boost)
         controls = SimpleControllerState(steer=self.steer_angle(car_state, ball_location), throttle=1, boost=boost)
 

@@ -1,12 +1,13 @@
-
 from copy import deepcopy
-from time import monotonic
-from math import pi
+from time import monotonic 
+from math import pi, atan2
+from queue import Empty as QueueEmpty
 
+from rlbot.matchcomms.common_uses.reply import reply_to
 from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
 from rlbot.messages.flat.QuickChatSelection import QuickChatSelection
 from rlbot.utils.structures.game_data_struct import GameTickPacket
-from rlbot.utils.game_state_util import GameState, CarState, Physics, Vector3
+from rlbot.utils.game_state_util import GameState, CarState, Physics, Vector3, Rotator
 
 from util.ball_prediction_analysis import find_slice_at_time
 from util.boost_pad_tracker import BoostPadTracker
@@ -16,6 +17,9 @@ from util.orientation import Orientation, relative_location
 from util.strategy import BaseStrategy, BallChaseStrat, StrategyGoal
 
 print("Azeem")
+
+def revector3(vec: Vector3):
+    return Vector3(vec.x, vec.y, vec.z)
 
 class Invisibot(BaseAgent):
     def __init__(self, name, team, index):
@@ -31,94 +35,137 @@ class Invisibot(BaseAgent):
         self.boost_pad_tracker = BoostPadTracker()
 
         self.count = 0
+        self.trying_to_comeback = False
+        self.seen_timer = 0
 
     def initialize_agent(self):
         self.boost_pad_tracker.initialize_boosts(self.get_field_info())
 
     def hide(self, packet: GameTickPacket):
         """Move the car so its not visible"""
+        if self.timestamp - self.seen_timer < 3:
+            return
         print("Hide")
         state = GameState(
-            cars={self.index: CarState(physics=Physics(location=Vector3(3520, 5100, 0)))}
+            cars={
+                self.index: CarState(physics=Physics(location=Vector3(3520, 5100, 0)))
+            }
         )
         self.set_game_state(state)
         self.physics = deepcopy(packet.game_cars[self.index].physics)
+        print(self.physics.location)
         self.boost = packet.game_cars[self.index].boost
         self.hidden = True
 
     def unhide(self, packet: GameTickPacket):
         print("unhide")
+        r = self.physics.rotation
+        p = Physics(
+            location=revector3(self.physics.location),
+            velocity=revector3(self.physics.velocity),
+            rotation=Rotator(pitch=r.pitch, yaw=r.yaw, roll=r.roll)
+        )
         state = GameState(
-            cars={self.index: CarState(physics=self.physics, boost_amount=self.boost)}
+            cars={
+                self.index: CarState(
+                    physics=p,
+                    boost_amount=self.boost,
+                )
+            }
         )
         self.set_game_state(state)
         self.hidden = False
-
+        self.trying_to_comeback = True
+        self.seen_timer = self.timestamp
 
     def get_output(self, packet: GameTickPacket) -> SimpleControllerState:
         """
         This function will be called by the framework many times per second. This is where you can
         see the motion of the ball, etc. and return controls to drive your car.
         """
+        try:
+            msg = self.matchcomms.incoming_broadcast.get_nowait()
+            if msg:
+                self.hidden = False
+                self.seen_timer = 0
+                self.trying_to_comeback = False
+                reply_to(self.matchcomms, msg)
+                print(f"Found: {msg}")
+        except QueueEmpty:
+            pass 
         self.count += 1
 
         if self.count % 60 == 0:
             print("Ticking")
+            print(self.physics.location)
+
         if not packet.game_info.is_round_active:
             return SimpleControllerState()
         tick_time = self.timestamp - monotonic()
-        if tick_time == 0:
-            return SimpleControllerState()
         self.timestamp = monotonic()
 
         # Keep our boost pad info updated with which pads are currently active
         self.boost_pad_tracker.update_boost_status(packet)
 
         my_car = packet.game_cars[self.index]
+        if self.trying_to_comeback:
+            expected_location = Vec3(self.physics.location)
+            current_location = Vec3(packet.game_cars[self.index].physics.location)
+            if expected_location.dist(current_location) > 300:
+                print("Waiting to get there")
+                return SimpleControllerState()
+            else:
+                self.trying_to_comeback = False
+
+
         if not self.hidden:
             self.physics = my_car.physics
-
+ 
         # Gather some information about our car and the ball
         car_location = Vec3(self.physics.location)
         ball_location = Vec3(packet.game_ball.physics.location)
 
-        if car_location.dist(ball_location) < 5 and self.hidden:
+        if car_location.dist(ball_location) < 1000 and self.hidden:
             self.unhide(packet)
         elif not self.hidden:
             self.hide(packet)
 
         result = self.strategy.tick(self.physics, packet, self.boost_pad_tracker)
 
+        self.renderer.draw_rect_3d(
+            self.physics.location, 8, 8, True, self.renderer.cyan(), centered=True
+        )
         if self.hidden:
-            self.renderer.draw_rect_3d(
-                self.physics.location, 8, 8, True, self.renderer.cyan(), centered=True
-            )
-            goal: StrategyGoal= result.goal
+            # self.renderer.draw_rect_3d(
+            #     self.physics.location, 8, 8, True, self.renderer.cyan(), centered=True
+            # )
+            goal: StrategyGoal = result.goal
             # 2300 uu/s -> boosting
             # 1410 uu/s -> throttling
             speed = 2300 if goal.boost else 1410
-            # orientation = Orientation(self.physics.rotation)
-            # relative = relative_location(self.physics.location, orientation, goal.target).normalized()
-            towards = goal.target - self.physics.location
+            orientation = Orientation(self.physics.rotation)
+            relative = relative_location(self.physics.location, orientation, goal.target).normalized()
+            towards = (Vec3(self.physics.location) - goal.target).normalized()
 
-            for f in 'xy': # no-z for now
-                contribution = getattr(towards, f)*speed
+            for f in "xy":  # no-z for now
+                contribution = getattr(towards, f) * speed
                 # position
                 cur = getattr(self.physics.location, f)
-                adjusted = cur + contribution/tick_time
-                setattr(self.physics.location, f,  adjusted)
+                adjusted = cur + contribution * tick_time
+                setattr(self.physics.location, f, adjusted)
 
                 # velocity
-                setattr(self.physics.velocity, f, contribution)
+                setattr(self.physics.velocity, f, -contribution)
 
             # rotation, TODO
-            ground_rotation_speed = 2*pi/3 # rough estimate
+            ground_rotation_speed = 2 * pi / 3  # rough estimate
+            angle = atan2(relative.y, relative.x)
+            self.physics.rotation.yaw = orientation.yaw - angle*ground_rotation_speed*tick_time
         else:
             controls = result.controls
             return controls
 
         return SimpleControllerState()
-
 
     # def old_function(self, car_location, ball_location, packet):
     #     if car_location.dist(ball_location) > 1500:
@@ -148,7 +195,6 @@ class Invisibot(BaseAgent):
     #     self.renderer.draw_rect_3d(
     #         target_location, 8, 8, True, self.renderer.cyan(), centered=True
     #     )
-
 
     #     controls = SimpleControllerState()
     #     controls.steer = steer_toward_target(my_car, target_location)

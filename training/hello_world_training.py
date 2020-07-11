@@ -1,7 +1,10 @@
 from pathlib import Path
 from dataclasses import dataclass, field
 from math import pi
+import time
 
+from rlbot.matchcomms.common_uses.reply import send_and_wait_for_replies
+from rlbot.matchcomms.common_uses.set_attributes_message import make_set_attributes_message
 from rlbot.utils.game_state_util import GameState, BoostState, BallState, CarState, Physics, Vector3, Rotator
 from rlbot.matchconfig.match_config import MatchConfig, PlayerConfig, Team
 from rlbottraining.common_exercises.common_base_exercises import StrikerExercise
@@ -35,6 +38,13 @@ class StrikerPatience(StrikerExercise):
 
     car_start_x: float = 0
 
+    def on_briefing(self): 
+        _ = send_and_wait_for_replies(self.get_matchcomms(), [
+            make_set_attributes_message(0, {'reset': True}),
+        ])
+        time.sleep(1)
+
+
     def make_game_state(self, rng: SeededRandomNumberGenerator) -> GameState:
         return GameState(
             ball=BallState(physics=Physics(
@@ -62,6 +72,12 @@ class DrivesToBallExercise(TrainingExercise):
     """
     grader: Grader = field(default_factory=DriveToBallGrader)
 
+    def on_briefing(self): 
+        _ = send_and_wait_for_replies(self.get_matchcomms(), [
+            make_set_attributes_message(0, {'reset': True}),
+        ])
+        time.sleep(1)
+    
     def make_game_state(self, rng: SeededRandomNumberGenerator) -> GameState:
         return GameState(
             ball=BallState(physics=Physics(
