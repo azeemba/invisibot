@@ -1,2 +1,5 @@
 [TYPECHECK]
 generated-members=QuickChats.*
+
+[MESSAGES CONTROL]
+disable=C

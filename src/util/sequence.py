@@ -4,6 +4,8 @@ from typing import List
 from rlbot.agents.base_agent import SimpleControllerState
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 
+from vec import Vec3
+
 
 @dataclass
 class StepResult:
