@@ -30,6 +30,8 @@ class Invisibot(BaseAgent):
 
         self.boost_pad_tracker = BoostPadTracker()
 
+        self.count = 0
+
     def initialize_agent(self):
         self.boost_pad_tracker.initialize_boosts(self.get_field_info())
 
@@ -37,7 +39,7 @@ class Invisibot(BaseAgent):
         """Move the car so its not visible"""
         print("Hide")
         state = GameState(
-            cars={self.index: CarState(physics=Physics(location=Vector3(0, 0, 2100)))}
+            cars={self.index: CarState(physics=Physics(location=Vector3(3520, 5100, 0)))}
         )
         self.set_game_state(state)
         self.physics = deepcopy(packet.game_cars[self.index].physics)
@@ -58,8 +60,15 @@ class Invisibot(BaseAgent):
         This function will be called by the framework many times per second. This is where you can
         see the motion of the ball, etc. and return controls to drive your car.
         """
-        print("In tick")
+        self.count += 1
+
+        if self.count % 60 == 0:
+            print("Ticking")
+        if not packet.game_info.is_round_active:
+            return SimpleControllerState()
         tick_time = self.timestamp - monotonic()
+        if tick_time == 0:
+            return SimpleControllerState()
         self.timestamp = monotonic()
 
         # Keep our boost pad info updated with which pads are currently active
@@ -75,12 +84,15 @@ class Invisibot(BaseAgent):
 
         if car_location.dist(ball_location) < 5 and self.hidden:
             self.unhide(packet)
-        else:
+        elif not self.hidden:
             self.hide(packet)
 
         result = self.strategy.tick(self.physics, packet, self.boost_pad_tracker)
 
         if self.hidden:
+            self.renderer.draw_rect_3d(
+                self.physics.location, 8, 8, True, self.renderer.cyan(), centered=True
+            )
             goal: StrategyGoal= result.goal
             # 2300 uu/s -> boosting
             # 1410 uu/s -> throttling

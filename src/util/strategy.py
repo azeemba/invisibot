@@ -12,8 +12,8 @@ from rlbot.agents.base_agent import SimpleControllerState
 from rlbot.utils.game_state_util import Physics, Vector3
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 
-from vec import Vec3
-from orientation import Orientation, relative_location
+from util.vec import Vec3
+from util.orientation import Orientation, relative_location
 
 @dataclass
 class StrategyGoal:
@@ -22,8 +22,8 @@ class StrategyGoal:
 
 @dataclass
 class StrategyResult:
-    controls: Optional(SimpleControllerState)
-    goal: Optional(StrategyGoal)
+    controls: Optional[SimpleControllerState]
+    goal: Optional[StrategyGoal]
 
 
 class BaseStrategy():
@@ -36,7 +36,7 @@ class BaseStrategy():
 
 class BallChaseStrat(BaseStrategy):
     def steer_angle(self, car_physics: Physics, target: Vector3):
-        relative = relative_location(Vec3(car_physics.location), Orientation(car_physics.rotation), target)
+        relative = relative_location(Vec3(car_physics.location), Orientation(car_physics.rotation), Vec3(target))
         angle = math.atan2(relative.y, relative.x)
         return max(min((angle * 5), 1), -1)
 
