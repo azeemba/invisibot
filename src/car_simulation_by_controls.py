@@ -17,6 +17,16 @@ class SimPhysics:
     angular_velocity: Vec3
     rotation: Rotator
 
+def throttle_acceleration_at_velocity(v_mag):
+    acc = 0
+    if 0 <= v_mag <= 1400:
+        component = v_mag/1400
+        acc = 1600*(1 - component) + 160*component
+    elif 1400 < v_mag < 1410:
+        acc = 160 # should be interp'd by whatever
+    return acc
+
+
 
 def step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     if abs(dt) < 1e-5:
@@ -58,24 +68,29 @@ def step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     # Otherwise, apply throttle acceleration.
     # If boost is 1, apply forward throttle as well
     # Assume constant acceleration
+    v_mag = physics.velocity.length()
     if controls.boost:
-        acceleration = orientation.forward*(2000)
+        print("Boosting")
+        boost_acc = 992
+        acc = boost_acc + throttle_acceleration_at_velocity(v_mag)
+        acceleration = orientation.forward*acc
     elif abs(throttle) > 0.015 and (direction * throttle >= 0):
+        print("Throttling")
         # not coasting and movement direction and throttle direction match
-        acceleration = orientation.forward * (1000 * throttle)
+        acceleration = orientation.forward * (throttle * throttle_acceleration_at_velocity(v_mag))
     elif abs(throttle) > 0.015 and (direction * throttle < 0):
+        print("Brakign")
         # not coasting but braking because velocity and throttle have oposite directions
         # shouldn't be higher than thing we are resisting
         resistance = min(3500, physics.velocity.length()/dt)
         acceleration = orientation.forward * (-resistance * direction)
     elif abs(throttle) <= 0.015:
+        print("Coasting")
         # coast deceleration
         # shouldn't be higher than thing we are resisting
         resistance = min(525, physics.velocity.length()/dt)
         acceleration = orientation.forward * (-resistance * direction)
 
-    if direction < 0:
-        print(f"Going backwards! {physics.velocity}, acc: {acceleration}")
     delta_v = acceleration * dt
     physics.velocity += delta_v
 
@@ -94,10 +109,8 @@ def step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
 
 
     v_mag = physics.velocity.length()
-    if controls.boost and v_mag > 2300:
+    if v_mag > 2300:
         physics.velocity = physics.velocity.rescale(2300)
-    elif v_mag > 1410:
-        physics.velocity = physics.velocity.rescale(1410)
 
     delta_x = physics.velocity * dt
     physics.location += delta_x
