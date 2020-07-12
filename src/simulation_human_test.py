@@ -18,6 +18,7 @@ from car_simulation_by_controls import SimPhysics, step as carSimStep
 from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 
+
 def v3toUI(v3):
     return Vector3(v3.x, v3.y, v3.z)
 
@@ -49,6 +50,7 @@ def deadzone(axis, transform=False):
         axis = (axis + 1) / 2
     return clamp11(axis) if abs(axis) >= 0.1 else 0
 
+
 class SimulationHumanTest(BaseAgent):
     def __init__(self, name, team, index):
         super().__init__(name, team, index)
@@ -64,7 +66,7 @@ class SimulationHumanTest(BaseAgent):
 
         self.last_recorded_ts = 0
         self.last_tick_ts = 0
-        self.physics: SimPhysics = None 
+        self.physics: SimPhysics = None
 
         self.locations = []
 
@@ -73,7 +75,7 @@ class SimulationHumanTest(BaseAgent):
         controls.steer = self.axis_data[0]
         controls.pitch = self.axis_data[1]
         controls.roll = -1 if self.button_data[4] else 1 if self.button_data[5] else 0
-        controls.yaw = self.axis_data[0] 
+        controls.yaw = self.axis_data[0]
         controls.jump = self.button_data[0]
         controls.boost = self.button_data[1]
         controls.handbrake = self.button_data[2]
@@ -85,28 +87,23 @@ class SimulationHumanTest(BaseAgent):
             location=Vec3(human.physics.location),
             velocity=Vec3(human.physics.velocity),
             angular_velocity=Vec3(human.physics.angular_velocity),
-            rotation=human.physics.rotation)
+            rotation=human.physics.rotation,
+        )
 
     def mark_simulation_spots(self):
-        # offset = 100 
+        # offset = 100
         # orientation = Orientation(self.physics.rotation)
         # offset_vec = orientation.forward * offset
         self.renderer.begin_rendering()
         for i in range(len(self.locations)):
             loc = self.locations[i]
-            component = float(i)/len(self.locations)
+            component = float(i) / len(self.locations)
             inverse = 1 - component
-            color = self.renderer.create_color(255,
-                ceil(255*component), 
-                ceil(255*inverse),
-                ceil(255*inverse)
+            color = self.renderer.create_color(
+                255, ceil(255 * component), ceil(255 * inverse), ceil(255 * inverse)
             )
-            self.renderer.draw_rect_3d(
-                loc, 4, 4, True, color, centered=True
-            )
+            self.renderer.draw_rect_3d(loc, 4, 4, True, color, centered=True)
         self.renderer.end_rendering()
-
-
 
     def get_output(self, packet: GameTickPacket) -> SimpleControllerState:
         human = packet.game_cars[0]
@@ -119,9 +116,9 @@ class SimulationHumanTest(BaseAgent):
         self.mark_simulation_spots()
 
         # Get controls.
-        for _ in pygame.event.get(): # User did something.
+        for _ in pygame.event.get():  # User did something.
             pass
-       
+
         self.controller = pygame.joystick.Joystick(0)
         self.controller.init()
         for i in range(self.controller.get_numbuttons()):
@@ -146,7 +143,7 @@ class SimulationHumanTest(BaseAgent):
         if cur_ts - self.last_recorded_ts > 0.1:
             self.locations.append(Vec3(self.physics.location))
             self.last_recorded_ts = cur_ts
- 
+
         return controls
         # self.game_interface.update_player_input(controls, 0)
 
