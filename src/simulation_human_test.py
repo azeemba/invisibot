@@ -7,6 +7,7 @@ example code from pygame: https://www.pygame.org/docs/ref/joystick.html#pygame.j
 
 from math import ceil
 from time import sleep, monotonic
+import json
 
 from rlbot.agents.base_script import BaseScript
 from rlbot.utils.game_state_util import Vector3, Rotator
@@ -64,11 +65,14 @@ class SimulationHumanTest(BaseAgent):
         self.axis_data = [0] * self.controller.get_numaxes()
         self.button_data = [False] * self.controller.get_numbuttons()
 
+        self.start_ts = monotonic()
         self.last_recorded_ts = 0
         self.last_tick_ts = 0
         self.physics: SimPhysics = None
 
         self.locations = []
+
+        self.non_forward_velocity = []
 
     def update_controls(self, controls: SimpleControllerState):
         controls.throttle = -self.axis_data[2]
@@ -105,19 +109,36 @@ class SimulationHumanTest(BaseAgent):
             self.renderer.draw_rect_3d(loc, 4, 4, True, color, centered=True)
         self.renderer.end_rendering()
 
+    def collect_nonforward_velocity(self, human, ts):
+        velo = human.physics.velocity
+        orientation = Orientation(human.physics.rotation)
+
+        forward_velo = orientation.forward.dot(velo)
+        nonforward = forward_velo - Vec3(velo).length()
+        self.non_forward_velocity.append((ts, nonforward))
+
+        if self.button_data[6] and len(self.non_forward_velocity) > 200:
+            with open("C:\\tmp\\non-forward.json", "w") as fh:
+                json.dump(self.non_forward_velocity, fh)
+                self.non_forward_velocity = []
+
     def get_output(self, packet: GameTickPacket) -> SimpleControllerState:
+        # Get controls.
+        for _ in pygame.event.get():  # User did something.
+            pass
+
+        if not packet.game_info.is_round_active:
+            return SimpleControllerState()
         human = packet.game_cars[0]
+
         cur_ts = monotonic()
+        self.collect_nonforward_velocity(human, cur_ts)
 
         if self.physics is None:
             self.reset_physics(human)
             return SimpleControllerState()
 
         self.mark_simulation_spots()
-
-        # Get controls.
-        for _ in pygame.event.get():  # User did something.
-            pass
 
         self.controller = pygame.joystick.Joystick(0)
         self.controller.init()
@@ -137,14 +158,17 @@ class SimulationHumanTest(BaseAgent):
         self.update_controls(controls)
         # print("Sending controls", controls.throttle)
         tick_duration = cur_ts - self.last_tick_ts
-        carSimStep(self.physics, controls, tick_duration)
-        self.last_tick_ts = cur_ts
+        resp = carSimStep(self.physics, controls, tick_duration)
+        if resp:
+            self.last_tick_ts = cur_ts
 
-        if cur_ts - self.last_recorded_ts > 0.1:
-            self.locations.append(Vec3(self.physics.location))
-            self.last_recorded_ts = cur_ts
+            if cur_ts - self.last_recorded_ts > 0.05:
+                self.locations.append(Vec3(self.physics.location))
+                self.last_recorded_ts = cur_ts
 
-        return controls
+            return controls
+        else:
+            return SimpleControllerState()
         # self.game_interface.update_player_input(controls, 0)
 
 

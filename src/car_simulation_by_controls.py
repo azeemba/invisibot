@@ -19,7 +19,9 @@ class SimPhysics:
 
 
 def step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
-
+    if abs(dt) < 1e-5:
+        # what? why?
+        return None
     # Start by assuming on ground. Will adjust things in the future
     steer = controls.steer
     radians_per_sec = 0
@@ -37,35 +39,66 @@ def step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     physics.rotation.yaw = yaw + radians_per_sec * steer * dt
 
     orientation = Orientation(physics.rotation)
-    orientation.forward.z = 0
-    direction = orientation.forward.dot(physics.velocity) < 0
-    if direction == 0:
-        direction = 1
-    direction_float_normalized = direction / abs(direction)
+    orientation.forward.z = 0 # do i need this?
 
-    acceleration = 0
+    direction = 1
+    if physics.velocity.length() < 10:
+        direction = 0
+    else:
+        direction_dot = orientation.forward.dot(physics.velocity)
+        direction = direction_dot / abs(direction_dot)
+
+    acceleration = Vec3()
     throttle = controls.throttle
+    # What we need to handle:
+    # If 0 velocity, apply throttle direction
+    # If 0 throttle, apply coasting deceleration
+    # For velocity not in"forward" direction, apply coasting deceleration
+    # If velocity and throttle are opposites, apply breaking deceleration
+    # Otherwise, apply throttle acceleration.
+    # If boost is 1, apply forward throttle as well
     # Assume constant acceleration
     if controls.boost:
-        acceleration = 2000
-    elif abs(throttle) > 0.015 and (direction * throttle > 0):
+        acceleration = orientation.forward*(2000)
+    elif abs(throttle) > 0.015 and (direction * throttle >= 0):
         # not coasting and movement direction and throttle direction match
-        acceleration = 1000 * direction_float_normalized * abs(throttle)
+        acceleration = orientation.forward * (1000 * throttle)
     elif abs(throttle) > 0.015 and (direction * throttle < 0):
-        # not coasting but braking
-        acceleration = -3500 * direction_float_normalized * abs(throttle)
+        # not coasting but braking because velocity and throttle have oposite directions
+        # shouldn't be higher than thing we are resisting
+        resistance = min(3500, physics.velocity.length()/dt)
+        acceleration = orientation.forward * (-resistance * direction)
     elif abs(throttle) <= 0.015:
-        # this is fixed, not multiplied by throttle value
-        acceleration = -525 * direction_float_normalized
+        # coast deceleration
+        # shouldn't be higher than thing we are resisting
+        resistance = min(525, physics.velocity.length()/dt)
+        acceleration = orientation.forward * (-resistance * direction)
 
+    if direction < 0:
+        print(f"Going backwards! {physics.velocity}, acc: {acceleration}")
     delta_v = acceleration * dt
-    original_v_mag = physics.velocity.length()
-    if controls.boost:
-        original_v_mag = min(original_v_mag, 2300)
-    else:
-        original_v_mag = min(original_v_mag, 1410)
+    physics.velocity += delta_v
 
-    physics.velocity = orientation.forward * (original_v_mag + delta_v)
+    # Presumably we should damp any non-forward velocity
+    damp_factor = 0.9 # lost 90%
+    v_mag = physics.velocity.length()
+    forward_velo = orientation.forward.dot(physics.velocity)
+    nonforward_magnitude = v_mag - abs(forward_velo)
+    if nonforward_magnitude > 7.5 and not controls.handbrake:
+        # damp the nonforward velo
+        nonforward_direction = (physics.velocity.normalized() - orientation.forward).normalized()
+        physics.velocity -= nonforward_direction * damp_factor * nonforward_magnitude
+    
+    nonforward_magnitude = v_mag - forward_velo
+    print(f"Nonforward mag {nonforward_magnitude}")
+
+
+    v_mag = physics.velocity.length()
+    if controls.boost and v_mag > 2300:
+        physics.velocity = physics.velocity.rescale(2300)
+    elif v_mag > 1410:
+        physics.velocity = physics.velocity.rescale(1410)
+
     delta_x = physics.velocity * dt
     physics.location += delta_x
 
