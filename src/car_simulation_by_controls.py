@@ -23,7 +23,7 @@ def throttle_acceleration_at_velocity(v_mag):
         component = v_mag/1400
         acc = 1600*(1 - component) + 160*component
     elif 1400 < v_mag < 1410:
-        acc = 160 # should be interp'd by whatever
+        acc = 160 # should be interp'd but whatever
     return acc
 
 
@@ -70,22 +70,18 @@ def step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     # Assume constant acceleration
     v_mag = physics.velocity.length()
     if controls.boost:
-        print("Boosting")
         boost_acc = 992
         acc = boost_acc + throttle_acceleration_at_velocity(v_mag)
         acceleration = orientation.forward*acc
     elif abs(throttle) > 0.015 and (direction * throttle >= 0):
-        print("Throttling")
         # not coasting and movement direction and throttle direction match
         acceleration = orientation.forward * (throttle * throttle_acceleration_at_velocity(v_mag))
     elif abs(throttle) > 0.015 and (direction * throttle < 0):
-        print("Brakign")
         # not coasting but braking because velocity and throttle have oposite directions
         # shouldn't be higher than thing we are resisting
         resistance = min(3500, physics.velocity.length()/dt)
         acceleration = orientation.forward * (-resistance * direction)
     elif abs(throttle) <= 0.015:
-        print("Coasting")
         # coast deceleration
         # shouldn't be higher than thing we are resisting
         resistance = min(525, physics.velocity.length()/dt)
@@ -95,17 +91,19 @@ def step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     physics.velocity += delta_v
 
     # Presumably we should damp any non-forward velocity
-    damp_factor = 0.9 # lost 90%
-    v_mag = physics.velocity.length()
-    forward_velo = orientation.forward.dot(physics.velocity)
-    nonforward_magnitude = v_mag - abs(forward_velo)
-    if nonforward_magnitude > 7.5 and not controls.handbrake:
-        # damp the nonforward velo
-        nonforward_direction = (physics.velocity.normalized() - orientation.forward).normalized()
-        physics.velocity -= nonforward_direction * damp_factor * nonforward_magnitude
-    
-    nonforward_magnitude = v_mag - forward_velo
-    print(f"Nonforward mag {nonforward_magnitude}")
+    if direction != 0:
+        damp_factor = 0.9 # lost 90%
+        v_mag = physics.velocity.length()
+        forward_dir = (orientation.forward * direction).normalized()
+        forward_velo = forward_dir.dot(physics.velocity)
+        nonforward_magnitude = v_mag - abs(forward_velo)
+        if nonforward_magnitude > 7.5 and not controls.handbrake:
+            # damp the nonforward velo
+            nonforward_direction = (physics.velocity.normalized() - forward_dir).normalized()
+            physics.velocity -= nonforward_direction * damp_factor * nonforward_magnitude
+        
+        nonforward_magnitude = v_mag - forward_velo
+        print(f"Nonforward mag {nonforward_magnitude}")
 
 
     v_mag = physics.velocity.length()
