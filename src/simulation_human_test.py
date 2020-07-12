@@ -104,7 +104,7 @@ class SimulationHumanTest(BaseAgent):
             component = float(i) / len(self.locations)
             inverse = 1 - component
             color = self.renderer.create_color(
-                255, ceil(255 * component), ceil(255 * inverse), ceil(255 * inverse)
+                255, ceil(255 * component), ceil(255 * inverse/2), ceil(255 * inverse)
             )
             self.renderer.draw_rect_3d(loc, 4, 4, True, color, centered=True)
         self.renderer.end_rendering()
