@@ -14,7 +14,7 @@ from rlbot.utils.game_state_util import Vector3, Rotator
 
 from util.orientation import Orientation, relative_location
 from util.vec import Vec3
-from car_simulation_by_controls import SimPhysics, step as carSimStep
+from car_simulation_by_controls import SimPhysics, step as carSimStep, on_ground_detection
 
 from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
 from rlbot.utils.structures.game_data_struct import GameTickPacket
@@ -71,6 +71,7 @@ class SimulationHumanTest(BaseAgent):
         self.physics: SimPhysics = None
 
         self.locations = []
+        self.up = []
 
         self.non_forward_velocity = []
 
@@ -86,7 +87,8 @@ class SimulationHumanTest(BaseAgent):
 
     def reset_physics(self, human):
         print("Resetting")
-        self.locations = [Vec3(human.physics.location)]
+        self.locations = []
+        self.up = []
         self.physics = SimPhysics(
             location=Vec3(human.physics.location),
             velocity=Vec3(human.physics.velocity),
@@ -107,6 +109,7 @@ class SimulationHumanTest(BaseAgent):
                 255, ceil(255 * component), ceil(255 * inverse/2), ceil(255 * inverse)
             )
             self.renderer.draw_rect_3d(loc, 4, 4, True, color, centered=True)
+            self.renderer.draw_line_3d(loc, loc + (self.up[i]*200), color)
         self.renderer.end_rendering()
 
     def collect_nonforward_velocity(self, human, ts):
@@ -130,9 +133,10 @@ class SimulationHumanTest(BaseAgent):
         if not packet.game_info.is_round_active:
             return SimpleControllerState()
         human = packet.game_cars[0]
+        on_ground_detection(human.physics)
 
         cur_ts = monotonic()
-        self.collect_nonforward_velocity(human, cur_ts)
+        # self.collect_nonforward_velocity(human, cur_ts)
 
         if self.physics is None:
             self.reset_physics(human)
@@ -164,6 +168,7 @@ class SimulationHumanTest(BaseAgent):
 
             if cur_ts - self.last_recorded_ts > 0.05:
                 self.locations.append(Vec3(self.physics.location))
+                self.up.append(Orientation(self.physics.rotation).up)
                 self.last_recorded_ts = cur_ts
 
             return controls

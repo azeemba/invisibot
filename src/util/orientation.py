@@ -11,7 +11,9 @@ class Orientation:
     It can also be used to find relative locations.
     """
 
-    def __init__(self, rotation):
+    def __init__(self, rotation=None):
+        if rotation is None:
+            return
         self.yaw = float(rotation.yaw)
         self.roll = float(rotation.roll)
         self.pitch = float(rotation.pitch)
@@ -26,6 +28,23 @@ class Orientation:
         self.forward = Vec3(cp * cy, cp * sy, sp)
         self.right = Vec3(cy*sp*sr-cr*sy, sy*sp*sr+cr*cy, -cp*sr)
         self.up = Vec3(-cr*cy*sp-sr*sy, -cr*sy*sp+sr*cy, cp*cr)
+
+    @staticmethod
+    def from_rot_mat(rotation_matrix):
+        o = Orientation()
+        o.forward = Vec3(
+            rotation_matrix[(0, 0)],
+            rotation_matrix[(1, 0)],
+            rotation_matrix[(2, 0)])
+        o.right = Vec3(
+            rotation_matrix[(0, 1)],
+            rotation_matrix[(1, 1)],
+            rotation_matrix[(2, 1)])
+        o.up = Vec3(
+            rotation_matrix[(0, 2)],
+            rotation_matrix[(1, 2)],
+            rotation_matrix[(2, 2)])
+        return o
 
 
 # Sometimes things are easier, when everything is seen from your point of view.
