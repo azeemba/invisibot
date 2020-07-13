@@ -14,7 +14,7 @@ from rlbot.utils.game_state_util import Vector3, Rotator
 
 from util.orientation import Orientation, relative_location
 from util.vec import Vec3
-from car_simulation_by_controls import SimPhysics, step as carSimStep, on_ground_detection
+from car_simulation_by_controls import SimPhysics, full_step as carSimStep, on_ground_detection, compare
 
 from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
 from rlbot.utils.structures.game_data_struct import GameTickPacket
@@ -75,6 +75,12 @@ class SimulationHumanTest(BaseAgent):
 
         self.non_forward_velocity = []
 
+        self.compare_helpers = {
+            "last_ts": 0,
+            "last_phys": None,
+            "count": 0
+        }
+
     def update_controls(self, controls: SimpleControllerState):
         controls.throttle = -self.axis_data[2]
         controls.steer = self.axis_data[0]
@@ -87,6 +93,7 @@ class SimulationHumanTest(BaseAgent):
 
     def reset_physics(self, human):
         print("Resetting")
+        self.last_tick_ts = monotonic()
         self.locations = []
         self.up = []
         self.physics = SimPhysics(
@@ -134,12 +141,21 @@ class SimulationHumanTest(BaseAgent):
         for _ in pygame.event.get():  # User did something.
             pass
 
+
         if not packet.game_info.is_round_active:
             return SimpleControllerState()
         human = packet.game_cars[0]
-        on_ground_detection(human.physics)
+        # on_ground_detection(human.physics)
 
         cur_ts = monotonic()
+        self.compare_helpers["count"] +=1
+        if self.compare_helpers["count"] % 30 == 0:
+            compare(
+                self.compare_helpers["last_phys"],
+                self.compare_helpers["controls"],
+                SimPhysics.p(human.physics),
+                cur_ts - self.compare_helpers["last_ts"])
+
         # self.collect_nonforward_velocity(human, cur_ts)
 
         if self.physics is None:
@@ -167,8 +183,13 @@ class SimulationHumanTest(BaseAgent):
         # print("Sending controls", controls.throttle)
         tick_duration = cur_ts - self.last_tick_ts
         resp = carSimStep(self.physics, controls, tick_duration)
-        if abs(self.physics.location.x) > 4096 or abs(self.physics.location.y) > (5120+880):
+        if abs(self.physics.location.x) > 4096+10 or abs(self.physics.location.y) > (5120+880):
             print("Car out of view")
+
+        self.compare_helpers["last_phys"] = SimPhysics.p(human.physics)
+        self.compare_helpers["last_ts"] =  cur_ts
+        self.compare_helpers["controls"] = controls
+
         if resp:
             self.last_tick_ts = cur_ts
 

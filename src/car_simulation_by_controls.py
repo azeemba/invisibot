@@ -18,7 +18,7 @@ from rlutilities.linear_algebra import (
     angle_between,
     axis_to_rotation,
     normalize,
-    cross
+    cross,
 )
 from rlutilities.simulation import Game, Field, sphere
 
@@ -36,6 +36,14 @@ class SimPhysics:
     velocity: Vec3
     angular_velocity: Vec3
     rotation: Rotator
+
+    @staticmethod
+    def r(r_ : Rotator) -> Rotator:
+        return Rotator(r_.pitch, r_.yaw, r_.roll)
+
+    @staticmethod
+    def p(p_):
+        return SimPhysics(Vec3(p_.location),Vec3(p_.velocity),Vec3(p_.angular_velocity),SimPhysics.r(p_.rotation))
 
 
 def to_rlu_vec(v) -> rlu_vec3:
@@ -69,11 +77,30 @@ def rot_mat_to_rot(theta: mat3) -> Rotator:
     roll = atan2(-theta[(2, 1)], theta[(2, 2)])
     return Rotator(pitch, yaw, roll)
 
-def on_ground_detection(p):
-    physics: SimPhysics = SimPhysics(Vec3(p.location), Vec3(p.velocity), Vec3(p.angular_velocity), p.rotation)
 
-    r = 120 # car radius
-    height = 30 # should be 17 but sometimes the curves are wonky
+def compare(
+    human_physics_last: SimPhysics, controls_last: SimpleControllerState, human_physics_cur: SimPhysics, dt
+):
+    # assume ground for now
+    full_step(human_physics_last, controls_last, dt)
+
+    # compare cur and last
+    cur = human_physics_cur
+    last = human_physics_last
+    velo = cur.velocity - last.velocity
+    loc = cur.location - last.location
+    rot = Orientation(cur.rotation).up - Orientation(last.rotation).up
+
+    print(f"Off by: v: {velo}:{velo.length():3f}, p: {loc}:{loc.length():3f}, rot: {rot}:{rot.length():3f}")
+
+
+def on_ground_detection(p):
+    physics: SimPhysics = SimPhysics(
+        Vec3(p.location), Vec3(p.velocity), Vec3(p.angular_velocity), p.rotation
+    )
+
+    r = 120  # car radius
+    height = 30  # should be 17 but sometimes the curves are wonky
     result = Field.collide(sphere(to_rlu_vec(physics.location), r))
 
     updated_location = rlu_to_Vec3(result.start)
@@ -84,10 +111,12 @@ def on_ground_detection(p):
     # Use height for now
     orientation = Orientation(physics.rotation)
     drift1 = angle_between(to_rlu_vec(orientation.up), result.direction)
-    on_ground_by_orientation = drift1 < (pi/13) # 15 degrees, normal "up" is not perfectly 0
+    on_ground_by_orientation = drift1 < (
+        pi / 13
+    )  # 15 degrees, normal "up" is not perfectly 0
 
     drift2 = physics.location - updated_location
-    on_ground_by_distance = drift2.length() < height # car height
+    on_ground_by_distance = drift2.length() < height  # car height
 
     on_ground = on_ground_by_orientation and on_ground_by_distance
     if not on_ground:
@@ -95,39 +124,42 @@ def on_ground_detection(p):
     else:
         print(f"GROUNDDDDD ------ o: {drift1}, d: {drift2.length()} ----------")
 
+
 def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     """
     Do the appropriate simulation based on the car and controller state
     """
-    r = 120 # car radius
-    height = 18 
+    r = 120  # car radius
+    height = 17
     result = Field.collide(sphere(to_rlu_vec(physics.location), r))
 
-    updated_location = rlu_to_Vec3(result.start)
     normal = rlu_to_Vec3(result.direction)
+    updated_location = rlu_to_Vec3(result.start) + normal*height
 
     # validate that we roughly match being on ground.
 
     # Use height for now
     orientation = Orientation(physics.rotation)
     drift1 = angle_between(to_rlu_vec(orientation.up), result.direction)
-    on_ground_by_orientation = drift1 < (pi/36) # 5 degrees, normal "up" is not perfectly 0
+    on_ground_by_orientation = drift1 < (
+        pi / 36
+    )  # 5 degrees, normal "up" is not perfectly 0
 
     drift2 = physics.location - updated_location
-    on_ground_by_distance = drift2.length() < height # car height
+    on_ground_by_distance = drift2.length() < 1.05*height  # car height
 
     on_ground = on_ground_by_orientation and on_ground_by_distance
 
-    print(f"{normal}, {orientation.up}")
+    # print(f"{normal}, {orientation.up}")
     if not on_ground:
         print(f"Not on ground: o: {drift1}, d: {drift2.length()}")
 
         if not on_ground_by_distance:
             # add gravity
-            physics.velocity += Vec3(0, 0, -650*dt)
+            physics.velocity += Vec3(0, 0, -650 * dt)
 
-        physics.location += physics.velocity*dt
-        physics.location.z = max(0.95*height, physics.location.z)
+        physics.location += physics.velocity * dt
+        physics.location.z = max(0.95 * height, physics.location.z)
         return physics
 
     physics_prime = SimPhysics(
@@ -159,24 +191,26 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
         physics_prime.angular_velocity, inverse_orientation
     )
 
-    result = Field.collide(sphere(to_rlu_vec(physics.location), r))
-    updated_location = rlu_to_Vec3(result.start)
-    normal = rlu_to_Vec3(result.direction)
+    # result = Field.collide(sphere(to_rlu_vec(physics.location), r))
+    # normal = rlu_to_Vec3(result.direction)
+    # updated_location = rlu_to_Vec3(result.start) + normal*height
 
-    physics.location = updated_location
-    # how to change rotator to respect normal
-    latest_orientation = Orientation(physics.rotation)
-    angle = angle_between(to_rlu_vec(normal), to_rlu_vec(latest_orientation.up))
-    ortho = normalize(cross(to_rlu_vec(normal), to_rlu_vec(latest_orientation.up)))*angle
-    rot_mat_adj = axis_to_rotation(ortho)
-    rot_mat = dot(rot_mat_adj, rot_mat_initial)
-    physics.rotation = rot_mat_to_rot(rot_mat)
+    # physics.location = updated_location
+    # # how to change rotator to respect normal
+    # latest_orientation = Orientation(physics.rotation)
+    # angle = angle_between(to_rlu_vec(normal), to_rlu_vec(latest_orientation.up))
+    # ortho = (
+    #     normalize(cross(to_rlu_vec(normal), to_rlu_vec(latest_orientation.up))) * angle
+    # )
+    # rot_mat_adj = axis_to_rotation(ortho)
+    # rot_mat = dot(rot_mat_adj, rot_mat_initial)
+    # physics.rotation = rot_mat_to_rot(rot_mat)
 
     # what are the chances that this works first try! Very small.
     return physics
 
 
-def step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
+def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     if abs(dt) < 1e-5:
         # what? why?
         return None
@@ -262,7 +296,7 @@ def step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
 
         nonforward_magnitude = v_mag - forward_velo
         # print(f"Nonforward mag {nonforward_magnitude}")
-    
+
     # we are on ground make z velocity 0
     physics.velocity.z = 0
 
