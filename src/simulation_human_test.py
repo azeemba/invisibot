@@ -101,6 +101,10 @@ class SimulationHumanTest(BaseAgent):
         # orientation = Orientation(self.physics.rotation)
         # offset_vec = orientation.forward * offset
         self.renderer.begin_rendering()
+        if len(self.locations) > 200:
+            # obvious optimization but for another day
+            self.locations = self.locations[len(self.locations) - 200:]
+            self.up = self.up[len(self.locations) - 200:]
         for i in range(len(self.locations)):
             loc = self.locations[i]
             component = float(i) / len(self.locations)
@@ -163,6 +167,8 @@ class SimulationHumanTest(BaseAgent):
         # print("Sending controls", controls.throttle)
         tick_duration = cur_ts - self.last_tick_ts
         resp = carSimStep(self.physics, controls, tick_duration)
+        if abs(self.physics.location.x) > 4096 or abs(self.physics.location.y) > (5120+880):
+            print("Car out of view")
         if resp:
             self.last_tick_ts = cur_ts
 
@@ -173,7 +179,9 @@ class SimulationHumanTest(BaseAgent):
 
             return controls
         else:
+            print("carSimpStep returned none")
             return SimpleControllerState()
+
         # self.game_interface.update_player_input(controls, 0)
 
 
