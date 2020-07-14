@@ -10,7 +10,7 @@ from time import sleep, monotonic
 import json
 
 from rlbot.agents.base_script import BaseScript
-from rlbot.utils.game_state_util import Vector3, Rotator
+from rlbot.utils.game_state_util import Vector3, Rotator, GameState, CarState, Physics
 
 from util.orientation import Orientation, relative_location
 from util.vec import Vec3
@@ -52,6 +52,8 @@ def deadzone(axis, transform=False):
     return clamp11(axis) if abs(axis) >= 0.1 else 0
 
 
+MODE = 'SIM_ONLY' # 'SIM_ONLY' #'USER_CAR_ONLY'
+
 class SimulationHumanTest(BaseAgent):
     def __init__(self, name, team, index):
         super().__init__(name, team, index)
@@ -74,11 +76,11 @@ class SimulationHumanTest(BaseAgent):
         self.up = []
 
         self.non_forward_velocity = []
+        self.count = 0
 
         self.compare_helpers = {
             "last_ts": 0,
-            "last_phys": None,
-            "count": 0
+            "last_phys": None
         }
 
     def update_controls(self, controls: SimpleControllerState):
@@ -141,6 +143,16 @@ class SimulationHumanTest(BaseAgent):
         for _ in pygame.event.get():  # User did something.
             pass
 
+        if MODE=='SIM_ONLY' and self.count % 30 == 1:
+            location=Vector3(self.physics.location.x, self.physics.location.y, self.physics.location.z)
+            if self.button_data[6]:
+                location = Vector3(0, 0, 30)
+            self.set_game_state(GameState(cars={self.index: CarState(physics=Physics(
+                location=location,
+                rotation=Rotator(self.physics.rotation.pitch, self.physics.rotation.yaw, self.physics.rotation.roll),
+                velocity=Vector3(self.physics.velocity.x, self.physics.velocity.y, self.physics.velocity.z),
+                angular_velocity=Vector3(self.physics.angular_velocity.x, self.physics.angular_velocity.y, self.physics.angular_velocity.z)
+            ))}))
 
         if not packet.game_info.is_round_active:
             return SimpleControllerState()
@@ -148,8 +160,8 @@ class SimulationHumanTest(BaseAgent):
         # on_ground_detection(human.physics)
 
         cur_ts = monotonic()
-        self.compare_helpers["count"] +=1
-        if self.compare_helpers["count"] % 30 == 0:
+        self.count +=1
+        if self.count % 30 == 0 and MODE=='USER_CAR_ONLY':
             compare(
                 self.compare_helpers["last_phys"],
                 self.compare_helpers["controls"],
@@ -182,7 +194,8 @@ class SimulationHumanTest(BaseAgent):
         self.update_controls(controls)
         # print("Sending controls", controls.throttle)
         tick_duration = cur_ts - self.last_tick_ts
-        resp = carSimStep(self.physics, controls, tick_duration)
+        if not MODE == 'USER_CAR_ONLY':
+            resp = carSimStep(self.physics, controls, tick_duration)
         if abs(self.physics.location.x) > 4096+10 or abs(self.physics.location.y) > (5120+880):
             print("Car out of view")
 
@@ -190,7 +203,7 @@ class SimulationHumanTest(BaseAgent):
         self.compare_helpers["last_ts"] =  cur_ts
         self.compare_helpers["controls"] = controls
 
-        if resp:
+        if not MODE == 'USER_CAR_ONLY' and resp:
             self.last_tick_ts = cur_ts
 
             if cur_ts - self.last_recorded_ts > 0.05:
@@ -199,8 +212,10 @@ class SimulationHumanTest(BaseAgent):
                 self.last_recorded_ts = cur_ts
 
             return controls
+        elif MODE == 'USER_CAR_ONLY':
+            return controls
         else:
-            print("carSimpStep returned none")
+            # print("carSimpStep returned none")
             return SimpleControllerState()
 
         # self.game_interface.update_player_input(controls, 0)

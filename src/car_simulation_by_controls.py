@@ -2,7 +2,7 @@
 Module to do rough car simulation based on SimpleControllerState
 """
 from dataclasses import dataclass
-from math import atan2, pi
+from math import atan2, pi, fmod
 
 from rlbot.utils.game_state_util import Rotator
 from rlbot.agents.base_agent import SimpleControllerState
@@ -110,7 +110,7 @@ def on_ground_detection(p):
 
     # Use height for now
     orientation = Orientation(physics.rotation)
-    drift1 = angle_between(to_rlu_vec(orientation.up), result.direction)
+    drift1 = fmod(angle_between(to_rlu_vec(orientation.up), result.direction), pi)
     on_ground_by_orientation = drift1 < (
         pi / 13
     )  # 15 degrees, normal "up" is not perfectly 0
@@ -124,6 +124,16 @@ def on_ground_detection(p):
     else:
         print(f"GROUNDDDDD ------ o: {drift1}, d: {drift2.length()} ----------")
 
+def clamp(physics):
+    height = 17*0.98
+    physics.location.z = max(height, physics.location.z)
+    physics.location.x = min(max(-4096 + height, physics.location.x),4096 - height)
+    physics.location.y = min(max(-5120 + height, physics.location.y),5120 - height)
+
+    v_mag = physics.velocity.length()
+    if v_mag > 2300:
+        physics.velocity = physics.velocity.rescale(2300)
+
 
 def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     """
@@ -134,32 +144,49 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     result = Field.collide(sphere(to_rlu_vec(physics.location), r))
 
     normal = rlu_to_Vec3(result.direction)
-    updated_location = rlu_to_Vec3(result.start) + normal*height
+    normal_base = rlu_to_Vec3(result.start) + normal*height
 
     # validate that we roughly match being on ground.
 
     # Use height for now
     orientation = Orientation(physics.rotation)
-    drift1 = angle_between(to_rlu_vec(orientation.up), result.direction)
+    drift1 = fmod(angle_between(to_rlu_vec(orientation.up), result.direction), pi)
     on_ground_by_orientation = drift1 < (
-        pi / 36
-    )  # 5 degrees, normal "up" is not perfectly 0
+        pi / 9
+    )  # 20 degrees, normal "up" is not perfectly 0
 
-    drift2 = physics.location - updated_location
-    on_ground_by_distance = drift2.length() < 1.05*height  # car height
+    drift2 = (physics.location - normal_base).dot(normal)
+    on_ground_by_distance = drift2 < 1.05*height  # car height
+
+    # perfectly sticky walls
+    if drift2 < 2*height:
+        physics.location = normal_base + height*normal
+        on_ground_by_distance = True
 
     on_ground = on_ground_by_orientation and on_ground_by_distance
 
     # print(f"{normal}, {orientation.up}")
     if not on_ground:
-        print(f"Not on ground: o: {drift1}, d: {drift2.length()}")
-
-        if not on_ground_by_distance:
-            # add gravity
-            physics.velocity += Vec3(0, 0, -650 * dt)
-
+        print(f"Not on ground: o: {drift1}, d: {drift2}")
+        physics.velocity += Vec3(0, 0, -650 * dt)
+        normal_velo = physics.velocity.dot(normal)
+        physics.velocity -= normal*normal_velo
         physics.location += physics.velocity * dt
-        physics.location.z = max(0.95 * height, physics.location.z)
+        if on_ground_by_distance:
+            physics.location += physics.velocity * dt
+
+            # correct orientation
+            angle = angle_between(to_rlu_vec(normal), to_rlu_vec(orientation.up))
+            ortho = (
+                normalize(cross(to_rlu_vec(normal), to_rlu_vec(orientation.up))) * -angle
+            )
+            rot = physics.rotation
+            rot_mat_initial: mat3 = euler_to_rotation(rlu_vec3(rot.pitch, rot.yaw, rot.roll))
+            rot_mat_adj = axis_to_rotation(ortho)
+            rot_mat = dot(rot_mat_adj, rot_mat_initial)
+            physics.rotation = rot_mat_to_rot(rot_mat)
+
+        clamp(physics)
         return physics
 
     physics_prime = SimPhysics(
@@ -169,6 +196,9 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
         Rotator(0, 0, 0),
     )
 
+    # steer may need to be rotated
+    if physics.velocity.dot(orientation.forward) < 0:
+        controls.steer = -controls.steer
     move_on_ground(physics_prime, controls, dt)
 
     # need to combine orientations
@@ -182,6 +212,8 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     physics.rotation = rot
 
     # unrotate other vectors
+    if physics.velocity.dot(orientation.forward) < 0:
+        controls.steer = -controls.steer
     inverse_rotation = transpose(rot_mat_initial)
     inverse_orientation = Orientation.from_rot_mat(inverse_rotation)
 
@@ -191,22 +223,8 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
         physics_prime.angular_velocity, inverse_orientation
     )
 
-    # result = Field.collide(sphere(to_rlu_vec(physics.location), r))
-    # normal = rlu_to_Vec3(result.direction)
-    # updated_location = rlu_to_Vec3(result.start) + normal*height
-
-    # physics.location = updated_location
-    # # how to change rotator to respect normal
-    # latest_orientation = Orientation(physics.rotation)
-    # angle = angle_between(to_rlu_vec(normal), to_rlu_vec(latest_orientation.up))
-    # ortho = (
-    #     normalize(cross(to_rlu_vec(normal), to_rlu_vec(latest_orientation.up))) * angle
-    # )
-    # rot_mat_adj = axis_to_rotation(ortho)
-    # rot_mat = dot(rot_mat_adj, rot_mat_initial)
-    # physics.rotation = rot_mat_to_rot(rot_mat)
-
     # what are the chances that this works first try! Very small.
+    clamp(physics)
     return physics
 
 
