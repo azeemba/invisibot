@@ -38,12 +38,17 @@ class SimPhysics:
     rotation: Rotator
 
     @staticmethod
-    def r(r_ : Rotator) -> Rotator:
+    def r(r_: Rotator) -> Rotator:
         return Rotator(r_.pitch, r_.yaw, r_.roll)
 
     @staticmethod
     def p(p_):
-        return SimPhysics(Vec3(p_.location),Vec3(p_.velocity),Vec3(p_.angular_velocity),SimPhysics.r(p_.rotation))
+        return SimPhysics(
+            Vec3(p_.location),
+            Vec3(p_.velocity),
+            Vec3(p_.angular_velocity),
+            SimPhysics.r(p_.rotation),
+        )
 
 
 def to_rlu_vec(v) -> rlu_vec3:
@@ -79,7 +84,10 @@ def rot_mat_to_rot(theta: mat3) -> Rotator:
 
 
 def compare(
-    human_physics_last: SimPhysics, controls_last: SimpleControllerState, human_physics_cur: SimPhysics, dt
+    human_physics_last: SimPhysics,
+    controls_last: SimpleControllerState,
+    human_physics_cur: SimPhysics,
+    dt,
 ):
     # assume ground for now
     full_step(human_physics_last, controls_last, dt)
@@ -91,7 +99,9 @@ def compare(
     loc = cur.location - last.location
     rot = Orientation(cur.rotation).up - Orientation(last.rotation).up
 
-    print(f"Off by: v: {velo}:{velo.length():3f}, p: {loc}:{loc.length():3f}, rot: {rot}:{rot.length():3f}")
+    print(
+        f"Off by: v: {velo}:{velo.length():3f}, p: {loc}:{loc.length():3f}, rot: {rot}:{rot.length():3f}"
+    )
 
 
 def on_ground_detection(p):
@@ -124,11 +134,12 @@ def on_ground_detection(p):
     else:
         print(f"GROUNDDDDD ------ o: {drift1}, d: {drift2.length()} ----------")
 
+
 def clamp(physics):
-    height = 17*0.98
+    height = 17 * 0.98
     physics.location.z = max(height, physics.location.z)
-    physics.location.x = min(max(-4096 + height, physics.location.x),4096 - height)
-    physics.location.y = min(max(-5120 + height, physics.location.y),5120 - height)
+    physics.location.x = min(max(-4096 + height, physics.location.x), 4096 - height)
+    physics.location.y = min(max(-5120 + height, physics.location.y), 5120 - height)
 
     v_mag = physics.velocity.length()
     if v_mag > 2300:
@@ -144,7 +155,7 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     result = Field.collide(sphere(to_rlu_vec(physics.location), r))
 
     normal = rlu_to_Vec3(result.direction)
-    normal_base = rlu_to_Vec3(result.start) + normal*height
+    normal_base = rlu_to_Vec3(result.start) + normal * height
 
     # validate that we roughly match being on ground.
 
@@ -156,11 +167,11 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     )  # 20 degrees, normal "up" is not perfectly 0
 
     drift2 = (physics.location - normal_base).dot(normal)
-    on_ground_by_distance = drift2 < 1.05*height  # car height
+    on_ground_by_distance = drift2 < 1.05 * height  # car height
 
     # perfectly sticky walls
-    if drift2 < 2*height:
-        physics.location = normal_base + height*normal
+    if drift2 < 2 * height:
+        physics.location = normal_base + height * normal
         on_ground_by_distance = True
 
     on_ground = on_ground_by_orientation and on_ground_by_distance
@@ -170,7 +181,7 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
         print(f"Not on ground: o: {drift1}, d: {drift2}")
         physics.velocity += Vec3(0, 0, -650 * dt)
         normal_velo = physics.velocity.dot(normal)
-        physics.velocity -= normal*normal_velo
+        physics.velocity -= normal * normal_velo
         physics.location += physics.velocity * dt
         if on_ground_by_distance:
             physics.location += physics.velocity * dt
@@ -178,10 +189,13 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
             # correct orientation
             angle = angle_between(to_rlu_vec(normal), to_rlu_vec(orientation.up))
             ortho = (
-                normalize(cross(to_rlu_vec(normal), to_rlu_vec(orientation.up))) * -angle
+                normalize(cross(to_rlu_vec(normal), to_rlu_vec(orientation.up)))
+                * -angle
             )
             rot = physics.rotation
-            rot_mat_initial: mat3 = euler_to_rotation(rlu_vec3(rot.pitch, rot.yaw, rot.roll))
+            rot_mat_initial: mat3 = euler_to_rotation(
+                rlu_vec3(rot.pitch, rot.yaw, rot.roll)
+            )
             rot_mat_adj = axis_to_rotation(ortho)
             rot_mat = dot(rot_mat_adj, rot_mat_initial)
             physics.rotation = rot_mat_to_rot(rot_mat)
