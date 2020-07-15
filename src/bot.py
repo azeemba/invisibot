@@ -16,7 +16,7 @@ from util.orientation import Orientation, relative_location
 
 from util.strategy import BaseStrategy, BallChaseStrat, StrategyGoal
 
-print("Azeem")
+from car_simulation_by_controls import SimPhysics, full_step as carSimStep
 
 def revector3(vec: Vector3):
     return Vector3(vec.x, vec.y, vec.z)
@@ -26,7 +26,7 @@ class Invisibot(BaseAgent):
         super().__init__(name, team, index)
         print("Initialized")
         self.hidden = False
-        self.physics: Physics = Physics()
+        self.physics: SimPhysics = None
         self.boost = 100
         self.strategy: BaseStrategy = BallChaseStrat()
 
@@ -46,20 +46,22 @@ class Invisibot(BaseAgent):
         if self.timestamp - self.seen_timer < 3:
             return
         print("Hide")
+        self.physics = SimPhysics.p(packet.game_cars[self.index].physics)
         state = GameState(
             cars={
-                self.index: CarState(physics=Physics(location=Vector3(3520, 5100, 0)))
+                self.index: CarState(
+                    physics=Physics(location=Vector3(3520, 5100, 0),
+                    velocity=Vector3(0, 0, 0)))
             }
         )
         self.set_game_state(state)
-        self.physics = deepcopy(packet.game_cars[self.index].physics)
-        print(self.physics.location)
         self.boost = packet.game_cars[self.index].boost
         self.hidden = True
 
     def unhide(self, packet: GameTickPacket):
         print("unhide")
         r = self.physics.rotation
+        print(r)
         p = Physics(
             location=revector3(self.physics.location),
             velocity=revector3(self.physics.velocity),
@@ -83,6 +85,14 @@ class Invisibot(BaseAgent):
         This function will be called by the framework many times per second. This is where you can
         see the motion of the ball, etc. and return controls to drive your car.
         """
+        if not packet.game_info.is_round_active:
+            self.physics = None
+            return SimpleControllerState()
+        if self.physics is None:
+            self.physics = SimPhysics.p(packet.game_cars[self.index].physics)
+            self.hidden = False
+            self.seen_timer = 0
+            self.trying_to_comeback = False
         try:
             msg = self.matchcomms.incoming_broadcast.get_nowait()
             if msg:
@@ -119,7 +129,7 @@ class Invisibot(BaseAgent):
 
 
         if not self.hidden:
-            self.physics = my_car.physics
+            self.physics = SimPhysics.p(my_car.physics) # why do this?
  
         # Gather some information about our car and the ball
         car_location = Vec3(self.physics.location)
@@ -136,31 +146,8 @@ class Invisibot(BaseAgent):
             self.physics.location, 8, 8, True, self.renderer.cyan(), centered=True
         )
         if self.hidden:
-            # self.renderer.draw_rect_3d(
-            #     self.physics.location, 8, 8, True, self.renderer.cyan(), centered=True
-            # )
-            goal: StrategyGoal = result.goal
-            # 2300 uu/s -> boosting
-            # 1410 uu/s -> throttling
-            speed = 2300 if goal.boost else 1410
-            orientation = Orientation(self.physics.rotation)
-            relative = relative_location(self.physics.location, orientation, goal.target).normalized()
-            towards = (Vec3(self.physics.location) - goal.target).normalized()
-
-            for f in "xy":  # no-z for now
-                contribution = getattr(towards, f) * speed
-                # position
-                cur = getattr(self.physics.location, f)
-                adjusted = cur + contribution * tick_time
-                setattr(self.physics.location, f, adjusted)
-
-                # velocity
-                setattr(self.physics.velocity, f, -contribution)
-
-            # rotation, TODO
-            ground_rotation_speed = 2 * pi / 3  # rough estimate
-            angle = atan2(relative.y, relative.x)
-            self.physics.rotation.yaw = orientation.yaw - angle*ground_rotation_speed*tick_time
+            controls = result.controls
+            carSimStep(self.physics, controls, tick_time)
         else:
             controls = result.controls
             return controls

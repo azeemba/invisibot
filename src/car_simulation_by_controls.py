@@ -44,10 +44,10 @@ class SimPhysics:
     @staticmethod
     def p(p_):
         return SimPhysics(
-            Vec3(p_.location),
-            Vec3(p_.velocity),
-            Vec3(p_.angular_velocity),
-            SimPhysics.r(p_.rotation),
+            location=Vec3(p_.location),
+            velocity=Vec3(p_.velocity),
+            angular_velocity=Vec3(p_.angular_velocity),
+            rotation=SimPhysics.r(p_.rotation),
         )
 
 
