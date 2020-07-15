@@ -80,6 +80,7 @@ class SimulationHumanTest(BaseAgent):
 
         self.locations = []
         self.up = []
+        self.forward = []
 
         self.non_forward_velocity = []
         self.count = 0
@@ -101,6 +102,7 @@ class SimulationHumanTest(BaseAgent):
         self.last_tick_ts = monotonic()
         self.locations = []
         self.up = []
+        self.forward = []
         self.physics = SimPhysics(
             location=Vec3(human.physics.location),
             velocity=Vec3(human.physics.velocity),
@@ -113,10 +115,11 @@ class SimulationHumanTest(BaseAgent):
         # orientation = Orientation(self.physics.rotation)
         # offset_vec = orientation.forward * offset
         self.renderer.begin_rendering()
-        if len(self.locations) > 200:
+        if len(self.locations) > 100:
             # obvious optimization but for another day
-            self.locations = self.locations[len(self.locations) - 200 :]
-            self.up = self.up[len(self.locations) - 200 :]
+            self.locations = self.locations[len(self.locations) - 100 :]
+            self.up = self.up[len(self.locations) - 100 :]
+            self.forward = self.forward[len(self.locations) - 100 :]
         for i in range(len(self.locations)):
             loc = self.locations[i]
             component = float(i) / len(self.locations)
@@ -126,6 +129,7 @@ class SimulationHumanTest(BaseAgent):
             )
             self.renderer.draw_rect_3d(loc, 4, 4, True, color, centered=True)
             self.renderer.draw_line_3d(loc, loc + (self.up[i] * 200), color)
+            self.renderer.draw_line_3d(loc, loc + (self.forward[i] * 200), color)
         self.renderer.end_rendering()
 
     def collect_nonforward_velocity(self, human, ts):
@@ -237,8 +241,10 @@ class SimulationHumanTest(BaseAgent):
             self.last_tick_ts = cur_ts
 
             if cur_ts - self.last_recorded_ts > 0.05:
+                o = Orientation(self.physics.rotation)
                 self.locations.append(Vec3(self.physics.location))
-                self.up.append(Orientation(self.physics.rotation).up)
+                self.up.append(o.up)
+                self.forward.append(o.forward)
                 self.last_recorded_ts = cur_ts
 
             return controls
