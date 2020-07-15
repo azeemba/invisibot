@@ -170,7 +170,7 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     on_ground_by_distance = drift2 < 1.05 * height  # car height
 
     # perfectly sticky walls
-    if drift2 < 2 * height:
+    if drift2 < 1.5 * height and not on_ground_by_distance:
         physics.location = normal_base + height * normal
         on_ground_by_distance = True
 
