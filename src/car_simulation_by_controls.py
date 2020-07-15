@@ -139,7 +139,7 @@ def clamp(physics):
     height = 17 * 0.98
     physics.location.z = max(height, physics.location.z)
     physics.location.x = min(max(-4096 + height, physics.location.x), 4096 - height)
-    physics.location.y = min(max(-5120 + height, physics.location.y), 5120 - height)
+    physics.location.y = min(max(-5120-880 + height, physics.location.y), 5120+880 - height)
 
     v_mag = physics.velocity.length()
     if v_mag > 2300:
