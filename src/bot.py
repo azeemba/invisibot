@@ -1,6 +1,6 @@
 from copy import deepcopy
 from time import monotonic 
-from math import pi, atan2
+from math import pi, atan2, ceil
 from queue import Empty as QueueEmpty
 
 from rlbot.matchcomms.common_uses.reply import reply_to
@@ -38,8 +38,42 @@ class Invisibot(BaseAgent):
         self.trying_to_comeback = False
         self.seen_timer = 0
 
+        self.locations = []
+        self.up = []
+        self.forward = []
+
     def initialize_agent(self):
         self.boost_pad_tracker.initialize_boosts(self.get_field_info())
+
+    def record_and_mark_simulation_spots(self, packet):
+        if self.count % 10 == 0:
+            o = Orientation(self.physics.rotation)
+            self.locations.append(Vec3(self.physics.location))
+            self.up.append(Vec3(o.up))
+            self.forward.append(Vec3(o.forward))
+
+        self.renderer.begin_rendering()
+        if len(self.locations) > 100:
+            # obvious optimization but for another day
+            self.locations = self.locations[len(self.locations) - 100 :]
+            self.up = self.up[len(self.locations) - 100 :]
+            self.forward = self.forward[len(self.locations) - 100 :]
+
+            # hack
+            if self.hidden and (self.locations[-2] - self.locations[-1]).length() < 2:
+                self.unhide(packet)
+
+        for i in range(len(self.locations)):
+            loc = self.locations[i]
+            component = float(i) / len(self.locations)
+            inverse = 1 - component
+            color = self.renderer.create_color(
+                255, ceil(255 * component), ceil(255 * inverse / 2), ceil(255 * inverse)
+            )
+            self.renderer.draw_rect_3d(loc, 4, 4, True, color, centered=True)
+            self.renderer.draw_line_3d(loc, loc + (self.up[i] * 200), color)
+            self.renderer.draw_line_3d(loc, loc + (self.forward[i] * 200), color)
+        self.renderer.end_rendering()
 
     def hide(self, packet: GameTickPacket):
         """Move the car so its not visible"""
@@ -90,6 +124,9 @@ class Invisibot(BaseAgent):
             return SimpleControllerState()
         if self.physics is None:
             self.physics = SimPhysics.p(packet.game_cars[self.index].physics)
+            self.up = []
+            self.forward = []
+            self.locations = []
             self.hidden = False
             self.seen_timer = 0
             self.trying_to_comeback = False
@@ -142,9 +179,10 @@ class Invisibot(BaseAgent):
 
         result = self.strategy.tick(self.physics, packet, self.boost_pad_tracker)
 
-        self.renderer.draw_rect_3d(
-            self.physics.location, 8, 8, True, self.renderer.cyan(), centered=True
-        )
+        # self.renderer.draw_rect_3d(
+        #     self.physics.location, 8, 8, True, self.renderer.cyan(), centered=True
+        # )
+        self.record_and_mark_simulation_spots(packet)
         if self.hidden:
             controls = result.controls
             carSimStep(self.physics, controls, tick_time)
