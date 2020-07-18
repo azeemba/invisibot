@@ -1,6 +1,7 @@
 import math
 
 from util.vec import Vec3
+from rlutilities.linear_algebra import mat3
 
 
 # This is a helper class for calculating directions relative to your car. You can extend it or delete if you want.
@@ -45,6 +46,13 @@ class Orientation:
             rotation_matrix[(1, 2)],
             rotation_matrix[(2, 2)])
         return o
+
+    def to_rot_mat(self):
+        return mat3(
+            self.forward[0], self.right[0], self.up[0],
+            self.forward[1], self.right[1], self.up[1],
+            self.forward[2], self.right[2], self.up[2]
+        ) 
 
 
 # Sometimes things are easier, when everything is seen from your point of view.

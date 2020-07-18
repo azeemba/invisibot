@@ -20,7 +20,7 @@ from rlutilities.linear_algebra import (
     normalize,
     cross,
 )
-from rlutilities.simulation import Game, Field, sphere
+from rlutilities.simulation import Game, Field, obb
 
 from util.vec import Vec3
 from util.orientation import Orientation
@@ -49,6 +49,17 @@ class SimPhysics:
             angular_velocity=Vec3(p_.angular_velocity),
             rotation=SimPhysics.r(p_.rotation),
         )
+
+
+def make_obb(physics: SimPhysics):
+    fixed_size = rlu_vec3(118.0/2, 84.2/2, 36.16/2) # octane
+    orientation = Orientation(physics.rotation).to_rot_mat()
+    
+    box = obb()
+    box.center = to_rlu_vec(physics.location)
+    box.half_width = fixed_size
+    box.orientation = orientation
+    return box
 
 
 def to_rlu_vec(v) -> rlu_vec3:
@@ -111,7 +122,7 @@ def on_ground_detection(p):
 
     r = 60 # car radius
     height = 30  # should be 17 but sometimes the curves are wonky
-    result = Field.collide(sphere(to_rlu_vec(physics.location), r))
+    result = Field.collide(make_obb(physics))
 
     updated_location = rlu_to_Vec3(result.start)
     normal = rlu_to_Vec3(result.direction)
@@ -151,9 +162,10 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     Do the appropriate simulation based on the car and controller state
     """
     r = 120  # car radius
-    height = 17
+    height = 36.16
     on_ceiling = physics.location.z >= (2044 - height)*0.9
-    result = Field.collide(sphere(to_rlu_vec(physics.location), r))
+    result = Field.collide(make_obb(physics))
+    print(result.direction)
 
     normal = rlu_to_Vec3(result.direction)
     normal_base = rlu_to_Vec3(result.start) + normal * height
@@ -164,15 +176,11 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float):
     orientation = Orientation(physics.rotation)
     drift1 = fmod(angle_between(to_rlu_vec(orientation.up), result.direction), pi)
     on_ground_by_orientation = drift1 < (
-        pi / 13
-    )  # 15 degrees, normal "up" is not perfectly 0
+        pi / 36
+    )  # 5 degrees, normal "up" is not perfectly 0
 
     drift2 = (physics.location - normal_base).dot(normal)
-    if abs(drift2) < 0.95*height and not on_ceiling:
-        # too close yo, if too negative you maybe on top of the ceiling?
-        physics.location = normal_base + height * normal
-
-    on_ground_by_distance = drift2 < 1.05 * height  # car height
+    on_ground_by_distance = abs(drift2) < 1.02 * height  # car height
 
     # perfectly sticky walls
     # if drift2 < 1.5 * height and not on_ground_by_distance:
