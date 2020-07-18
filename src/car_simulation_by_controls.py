@@ -26,7 +26,7 @@ from util.vec import Vec3
 from util.orientation import Orientation
 
 # only use it for `Field` to be initialized.
-g = Game(0, 0)
+g = Game()
 g.set_mode("soccar")
 
 
@@ -109,7 +109,7 @@ def on_ground_detection(p):
         Vec3(p.location), Vec3(p.velocity), Vec3(p.angular_velocity), p.rotation
     )
 
-    r = 120  # car radius
+    r = 60 # car radius
     height = 30  # should be 17 but sometimes the curves are wonky
     result = Field.collide(sphere(to_rlu_vec(physics.location), r))
 
