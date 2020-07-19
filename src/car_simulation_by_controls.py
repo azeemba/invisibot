@@ -332,7 +332,7 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float, r
     return physics
 
 
-def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: float):
+def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: float, renderer=None):
     if abs(dt) < 1e-5:
         # what? why?
         return None
@@ -350,7 +350,7 @@ def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: flo
             radians_per_sec = 2.05
 
     yaw = physics.rotation.yaw
-    physics.rotation.yaw = yaw + radians_per_sec * steer * dt
+    physics.rotation.yaw = yaw - radians_per_sec * steer * dt
 
     orientation = Orientation(physics.rotation)
     # orientation.forward.z = 0  # do i need this?
@@ -397,11 +397,11 @@ def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: flo
     physics.velocity += delta_v
 
     # Presumably we should damp any non-forward velocity
-    # if direction != 0 and not controls.handbrake:
-    #     damp_nonforward(physics, orientation)
+    if direction != 0 and not controls.handbrake:
+        damp_nonforward(physics, orientation)
         
     # we are on ground make z velocity 0
-    # physics.velocity.z = 0
+    physics.velocity.z = 0
 
     v_mag = physics.velocity.length()
     if v_mag > 2300:
