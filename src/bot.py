@@ -14,9 +14,9 @@ from util.boost_pad_tracker import BoostPadTracker
 from util.vec import Vec3
 from util.orientation import Orientation, relative_location
 
-from util.strategy import BaseStrategy, BallChaseStrat, StrategyGoal
+from util.strategy import BaseStrategy, BallChaseStrat, StrategyGoal, HelpfulTestStrat
 
-from car_simulation_by_controls import SimPhysics, full_step as carSimStep
+from car_simulation_by_controls import SimPhysics, move_on_ground as carSimStep
 
 def revector3(vec: Vector3):
     return Vector3(vec.x, vec.y, vec.z)
@@ -28,7 +28,7 @@ class Invisibot(BaseAgent):
         self.hidden = False
         self.physics: SimPhysics = None
         self.boost = 100
-        self.strategy: BaseStrategy = BallChaseStrat()
+        self.strategy: BaseStrategy = HelpfulTestStrat() # BallChaseStrat()
 
         self.timestamp = monotonic()
 

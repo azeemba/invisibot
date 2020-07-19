@@ -49,3 +49,7 @@ class BallChaseStrat(BaseStrategy):
         controls = SimpleControllerState(steer=self.steer_angle(car_state, ball_location), throttle=throttle, boost=boost)
 
         return StrategyResult(controls, goal)
+
+class HelpfulTestStrat(BaseStrategy):
+    def tick(self, car_state, package, field_boost):
+        return StrategyResult(SimpleControllerState(steer=0.9, throttle=1), None)

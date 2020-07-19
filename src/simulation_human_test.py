@@ -129,7 +129,7 @@ class SimulationHumanTest(BaseAgent):
             )
             self.renderer.draw_rect_3d(loc, 4, 4, True, color, centered=True)
             self.renderer.draw_line_3d(loc, loc + (self.up[i] * 200), color)
-            self.renderer.draw_line_3d(loc, loc + (self.forward[i] * 200), color)
+            # self.renderer.draw_line_3d(loc, loc + (self.forward[i] * 200), color)
         self.renderer.end_rendering()
 
     def collect_nonforward_velocity(self, human, ts):
@@ -206,7 +206,7 @@ class SimulationHumanTest(BaseAgent):
             self.reset_physics(human)
             return SimpleControllerState()
 
-        self.mark_simulation_spots()
+        # self.mark_simulation_spots()
 
         self.controller = pygame.joystick.Joystick(0)
         self.controller.init()
@@ -227,7 +227,7 @@ class SimulationHumanTest(BaseAgent):
         # print("Sending controls", controls.throttle)
         tick_duration = cur_ts - self.last_tick_ts
         if not MODE == "USER_CAR_ONLY":
-            resp = carSimStep(self.physics, controls, tick_duration)
+            resp = carSimStep(self.physics, controls, tick_duration, self.renderer)
         if abs(self.physics.location.x) > 4096 + 10 or abs(self.physics.location.y) > (
             5120 + 880
         ):
