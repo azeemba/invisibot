@@ -25,7 +25,7 @@ from rlutilities.linear_algebra import (
 from rlutilities.simulation import Game, Field, obb
 
 from util.vec import Vec3
-from util.orientation import Orientation
+from util.orientation import Orientation, relative_location
 
 # only use it for `Field` to be initialized.
 g = Game()
@@ -73,29 +73,9 @@ def rlu_to_Vec3(v) -> Vec3:
 
 
 def rotate_vector(v: Vec3, r: mat3, around: Vec3=None) -> Vec3:
-    if around is None:
-        out = dot(r,to_rlu_vec(v))
-        return Vec3(out[0], out[1], out[2])
-    else:
-        transform1 = mat4(
-            1, 0, 0, around.x,
-            0, 1, 0, around.y,
-            0, 0, 1, around.z,
-            0, 0, 0, 1)
-        transform2 = mat4(
-            1, 0, 0, -around.x,
-            0, 1, 0, -around.y,
-            0, 0, 1, -around.z,
-            0, 0, 0, 1)
-        rot = mat4(
-            r[(0, 0)], r[0, 1], r[0, 2], 0,
-            r[(1, 0)], r[1, 1], r[1, 2], 0,
-            r[(2, 0)], r[2, 1], r[2, 2], 0,
-            0, 0, 0, 1
-        )
-        out = dot(dot(dot(transform1, rot), transform2), rlu_vec4(v.x, v.y, v.z, 1)) # 4d
-        return Vec3(out[0], out[1], out[2])
-
+    out = dot(r,to_rlu_vec(v))
+    return Vec3(out[0], out[1], out[2])
+    
 
 def throttle_acceleration_at_velocity(v_mag) -> float:
     acc = 0
@@ -290,17 +270,29 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float, r
         # rot_mat = dot(rot_mat_adj, rot_mat_initial)
         # physics.rotation = rot_mat_to_rot(rot_mat)
 
+    return rotate_ground_and_move(physics, dt, normal, controls)
+
+def rotate_and_move_only(physics, control, dt, renderer=None):
+    rotate_ground_and_move(physics, dt, Vec3(0, 0, 1), control)
+    clamp(physics)
+    return physics
+
+def rotate_ground_and_move(physics, dt, normal, controls):
     physics.velocity += Vec3(0, 0, -650 * dt)
     normal_velo = physics.velocity.dot(normal*-1)
-    physics.velocity -= (normal * normal_velo)*dt
+    if normal_velo > 0:
+        physics.velocity -= (normal * normal_velo)*dt
 
     # steer may need to be rotated
     # if physics.velocity.dot(orientation.forward) < 0:
         # controls.steer = -controls.steer
 
+    orientation = Orientation(physics.rotation)
+    orig_rot_mat = orientation.to_rot_mat()
+
     physics_prime = SimPhysics(
-        rotate_vector(physics.location, orientation.to_rot_mat()),
-        rotate_vector(physics.velocity, orientation.to_rot_mat(), physics.location),
+        Vec3(0, 0, 0),
+        Vec3(orientation.forward.dot(physics.velocity), orientation.right.dot(physics.velocity), 0),
         physics.angular_velocity, # ground move just ignores it 
         Rotator(0, 0, 0),
     )
@@ -309,26 +301,21 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float, r
     move_on_ground(physics_prime, controls, dt)
 
     # need to combine orientations
-    rot = physics.rotation
-    rot_mat_initial: mat3 = Orientation(rot).to_rot_mat()
-    rot = physics_prime.rotation
-    rot_mat_upd: mat3 = Orientation(rot).to_rot_mat()
-
-    rot_mat = dot(rot_mat_upd, rot_mat_initial)
-    rot = rot_mat_to_rot(rot_mat)
-    physics.rotation = rot
+    old_yaw = physics.rotation.yaw
+    physics.rotation.yaw += physics_prime.rotation.yaw
 
     # unrotate other vectors
     # if physics.velocity.dot(orientation.forward) < 0:
         # controls.steer = -controls.steer
-    inverse_rotation = transpose(rot_mat_initial)
+    # inverse_rotation = transpose(orig_rot_mat)
 
-    physics.location = rotate_vector(physics_prime.location, inverse_rotation)
-    physics.velocity = rotate_vector(physics_prime.velocity, inverse_rotation, physics_prime.location)
+    physics.location += orientation.forward*physics_prime.location.x + orientation.right*physics_prime.location.y
+    physics.velocity = orientation.forward*physics_prime.velocity.x + orientation.right*physics_prime.velocity.y
     physics.angular_velocity = physics_prime.angular_velocity # should be unchanged
 
     # what are the chances that this works first try! Very small.
     clamp(physics)
+    # print(f"{old_yaw} + {physics_prime.rotation.yaw} =? {physics.rotation.yaw}")
     return physics
 
 
@@ -350,7 +337,7 @@ def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: flo
             radians_per_sec = 2.05
 
     yaw = physics.rotation.yaw
-    physics.rotation.yaw = yaw - radians_per_sec * steer * dt
+    physics.rotation.yaw = yaw + radians_per_sec * steer * dt
 
     orientation = Orientation(physics.rotation)
     # orientation.forward.z = 0  # do i need this?

@@ -16,7 +16,7 @@ from util.orientation import Orientation, relative_location
 from util.vec import Vec3
 from car_simulation_by_controls import (
     SimPhysics,
-    move_on_ground as carSimStep,
+    rotate_and_move_only as carSimStep,
     on_ground_detection,
     compare,
 )
@@ -151,13 +151,16 @@ class SimulationHumanTest(BaseAgent):
             pass
 
         if MODE == "SIM_ONLY" and self.count % 30 == 1:
+            if self.button_data[6]:
+                self.physics.location = Vec3(0, 0, 30)
+                self.physics.velocity = Vec3(0, 0, 0)
+            
             location = Vector3(
                 self.physics.location.x,
                 self.physics.location.y,
                 self.physics.location.z,
             )
-            if self.button_data[6]:
-                location = Vector3(0, 0, 30)
+
             self.set_game_state(
                 GameState(
                     cars={
@@ -206,7 +209,7 @@ class SimulationHumanTest(BaseAgent):
             self.reset_physics(human)
             return SimpleControllerState()
 
-        # self.mark_simulation_spots()
+        self.mark_simulation_spots()
 
         self.controller = pygame.joystick.Joystick(0)
         self.controller.init()

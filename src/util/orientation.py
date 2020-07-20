@@ -1,6 +1,7 @@
 import math
 
 from util.vec import Vec3
+from rlbot.utils.game_state_util import Rotator
 from rlutilities.linear_algebra import mat3
 
 
@@ -12,9 +13,7 @@ class Orientation:
     It can also be used to find relative locations.
     """
 
-    def __init__(self, rotation=None):
-        if rotation is None:
-            return
+    def __init__(self, rotation: Rotator):
         self.yaw = float(rotation.yaw)
         self.roll = float(rotation.roll)
         self.pitch = float(rotation.pitch)
@@ -32,19 +31,11 @@ class Orientation:
 
     @staticmethod
     def from_rot_mat(rotation_matrix):
-        o = Orientation()
-        o.forward = Vec3(
-            rotation_matrix[(0, 0)],
-            rotation_matrix[(1, 0)],
-            rotation_matrix[(2, 0)])
-        o.right = Vec3(
-            rotation_matrix[(0, 1)],
-            rotation_matrix[(1, 1)],
-            rotation_matrix[(2, 1)])
-        o.up = Vec3(
-            rotation_matrix[(0, 2)],
-            rotation_matrix[(1, 2)],
-            rotation_matrix[(2, 2)])
+        theta = rotation_matrix
+        pitch = math.atan2(theta[(2, 0)], Vec3(theta[(0, 0)], theta[(1, 0)], 0).length()),
+        yaw = math.atan2(theta[(1, 0)], theta[(0, 0)]),
+        roll = math.atan2(-theta[(2, 1)], theta[(2, 2)])
+        o = Orientation(Rotator(pitch, yaw, roll))
         return o
 
     def to_rot_mat(self):
