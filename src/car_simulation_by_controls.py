@@ -52,6 +52,28 @@ class SimPhysics:
             rotation=SimPhysics.r(p_.rotation),
         )
 
+def printO(o: Orientation):
+    print(f"f: {o.forward}, r: {o.right}, u: {o.up}")
+
+def rotate_by_axis(orientation: Orientation, original: Vec3, target: Vec3) -> Rotator:
+    """
+    Updates the given orientation's original direction to the target direction.
+    original should be `orientation.forward` or `orientation.up` or `orientation.right`
+    """
+    angle = angle_between(to_rlu_vec(target), to_rlu_vec(original))
+    rotate_axis = cross(to_rlu_vec(target), to_rlu_vec(original))
+    ortho = (
+        normalize(rotate_axis) * -angle
+    )
+    rot_mat_initial: mat3 = orientation.to_rot_mat()
+    rot_mat_adj = axis_to_rotation(ortho)
+
+    rot_mat = dot(rot_mat_adj, rot_mat_initial )
+    r = rot_mat_to_rot(rot_mat)
+    # printO(orientation)
+    # printO(Orientation(r))
+    return r
+
 
 def make_obb(physics: SimPhysics):
     fixed_size = rlu_vec3(118.0/2, 84.2/2, 36.16/2) # octane
@@ -273,7 +295,17 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float, r
     return rotate_ground_and_move(physics, dt, normal, controls)
 
 def rotate_and_move_only(physics, control, dt, renderer=None):
-    rotate_ground_and_move(physics, dt, Vec3(0, 0, 1), control)
+    # we will now find actual normal
+    height = 36.16/2
+    result = Field.collide(make_obb(physics))
+    normal = rlu_to_Vec3(result.direction)
+    normal_base = rlu_to_Vec3(result.start)
+
+    orientation = Orientation(physics.rotation)
+
+    physics.rotation = rotate_by_axis(orientation, orientation.up, normal)
+
+    rotate_ground_and_move(physics, dt, normal, control)
     clamp(physics)
     return physics
 
@@ -302,7 +334,9 @@ def rotate_ground_and_move(physics, dt, normal, controls):
 
     # need to combine orientations
     old_yaw = physics.rotation.yaw
-    physics.rotation.yaw += physics_prime.rotation.yaw
+    # this doesn't work though right? Because we don't know if matching forwards is enough
+    new_orientation = Orientation(physics_prime.rotation)
+    physics.rotation = rot_mat_to_rot(dot(orientation.to_rot_mat(), new_orientation.to_rot_mat()))
 
     # unrotate other vectors
     # if physics.velocity.dot(orientation.forward) < 0:

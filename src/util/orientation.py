@@ -32,8 +32,8 @@ class Orientation:
     @staticmethod
     def from_rot_mat(rotation_matrix):
         theta = rotation_matrix
-        pitch = math.atan2(theta[(2, 0)], Vec3(theta[(0, 0)], theta[(1, 0)], 0).length()),
-        yaw = math.atan2(theta[(1, 0)], theta[(0, 0)]),
+        pitch = math.atan2(theta[(2, 0)], Vec3(theta[(0, 0)], theta[(1, 0)], 0).length())
+        yaw = math.atan2(theta[(1, 0)], theta[(0, 0)])
         roll = math.atan2(-theta[(2, 1)], theta[(2, 2)])
         o = Orientation(Rotator(pitch, yaw, roll))
         return o
