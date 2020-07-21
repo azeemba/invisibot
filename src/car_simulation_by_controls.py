@@ -323,6 +323,16 @@ def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: flo
     if abs(dt) < 1e-5:
         # what? why?
         return None
+
+    orientation = Orientation(physics.rotation)
+    direction = 1
+    if physics.velocity.length() < 10:
+        direction = 0
+    else:
+        direction_dot = orientation.forward.dot(physics.velocity)
+        direction = direction_dot / abs(direction_dot)
+
+
     # Start by assuming on ground. Will adjust things in the future
     steer = controls.steer
     radians_per_sec = 0
@@ -337,17 +347,10 @@ def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: flo
             radians_per_sec = 2.05
 
     yaw = physics.rotation.yaw
-    physics.rotation.yaw = yaw + radians_per_sec * steer * dt
+    physics.rotation.yaw = yaw + radians_per_sec * steer * dt * direction
 
     orientation = Orientation(physics.rotation)
     # orientation.forward.z = 0  # do i need this?
-
-    direction = 1
-    if physics.velocity.length() < 10:
-        direction = 0
-    else:
-        direction_dot = orientation.forward.dot(physics.velocity)
-        direction = direction_dot / abs(direction_dot)
 
     acceleration = Vec3()
     throttle = controls.throttle

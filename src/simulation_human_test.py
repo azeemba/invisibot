@@ -16,7 +16,7 @@ from util.orientation import Orientation, relative_location
 from util.vec import Vec3
 from car_simulation_by_controls import (
     SimPhysics,
-    rotate_and_move_only as carSimStep,
+    move_on_ground as carSimStep,
     on_ground_detection,
     compare,
 )
