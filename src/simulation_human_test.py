@@ -107,7 +107,7 @@ class SimulationHumanTest(BaseAgent):
             location=Vec3(human.physics.location),
             velocity=Vec3(human.physics.velocity),
             angular_velocity=Vec3(human.physics.angular_velocity),
-            rotation=human.physics.rotation,
+            rotation=Rotator(human.physics.rotation.pitch, human.physics.rotation.yaw, human.physics.rotation.roll)
         )
 
     def mark_simulation_spots(self):
@@ -117,9 +117,9 @@ class SimulationHumanTest(BaseAgent):
         self.renderer.begin_rendering()
         if len(self.locations) > 100:
             # obvious optimization but for another day
-            self.locations = self.locations[len(self.locations) - 100 :]
-            self.up = self.up[len(self.locations) - 100 :]
-            self.forward = self.forward[len(self.locations) - 100 :]
+            self.locations = self.locations[-100 :]
+            self.up = self.up[-100 :]
+            self.forward = self.forward[-100 :]
         for i in range(len(self.locations)):
             loc = self.locations[i]
             component = float(i) / len(self.locations)
