@@ -52,8 +52,10 @@ class SimPhysics:
             rotation=SimPhysics.r(p_.rotation),
         )
 
+
 def printO(o: Orientation):
     print(f"f: {o.forward}, r: {o.right}, u: {o.up}")
+
 
 def rotate_by_axis(orientation: Orientation, original: Vec3, target: Vec3) -> Rotator:
     """
@@ -62,13 +64,11 @@ def rotate_by_axis(orientation: Orientation, original: Vec3, target: Vec3) -> Ro
     """
     angle = angle_between(to_rlu_vec(target), to_rlu_vec(original))
     rotate_axis = cross(to_rlu_vec(target), to_rlu_vec(original))
-    ortho = (
-        normalize(rotate_axis) * -angle
-    )
+    ortho = normalize(rotate_axis) * -angle
     rot_mat_initial: mat3 = orientation.to_rot_mat()
     rot_mat_adj = axis_to_rotation(ortho)
 
-    rot_mat = dot(rot_mat_adj, rot_mat_initial )
+    rot_mat = dot(rot_mat_adj, rot_mat_initial)
     r = rot_mat_to_rot(rot_mat)
     # printO(orientation)
     # printO(Orientation(r))
@@ -76,9 +76,9 @@ def rotate_by_axis(orientation: Orientation, original: Vec3, target: Vec3) -> Ro
 
 
 def make_obb(physics: SimPhysics):
-    fixed_size = rlu_vec3(118.0/2, 84.2/2, 36.16/2) # octane
+    fixed_size = rlu_vec3(118.0 / 2, 84.2 / 2, 36.16 / 2)  # octane
     orientation = Orientation(physics.rotation).to_rot_mat()
-    
+
     box = obb()
     box.center = to_rlu_vec(physics.location)
     box.half_width = fixed_size
@@ -94,10 +94,10 @@ def rlu_to_Vec3(v) -> Vec3:
     return Vec3(v[0], v[1], v[2])
 
 
-def rotate_vector(v: Vec3, r: mat3, around: Vec3=None) -> Vec3:
-    out = dot(r,to_rlu_vec(v))
+def rotate_vector(v: Vec3, r: mat3, around: Vec3 = None) -> Vec3:
+    out = dot(r, to_rlu_vec(v))
     return Vec3(out[0], out[1], out[2])
-    
+
 
 def throttle_acceleration_at_velocity(v_mag) -> float:
     acc = 0
@@ -143,7 +143,7 @@ def on_ground_detection(p):
         Vec3(p.location), Vec3(p.velocity), Vec3(p.angular_velocity), p.rotation
     )
 
-    r = 60 # car radius
+    r = 60  # car radius
     height = 30  # should be 17 but sometimes the curves are wonky
     result = Field.collide(make_obb(physics))
 
@@ -171,25 +171,31 @@ def on_ground_detection(p):
 
 def clamp(physics):
     # This is a coarse clamping.
-    height = 0 #36.16/2.0 * 0.99
+    height = 0  # 36.16/2.0 * 0.99
     physics.location.z = max(height, physics.location.z)
     physics.location.x = min(max(-4096 + height, physics.location.x), 4096 - height)
-    physics.location.y = min(max(-5120-880 + height, physics.location.y), 5120+880 - height)
+    physics.location.y = min(
+        max(-5120 - 880 + height, physics.location.y), 5120 + 880 - height
+    )
 
     v_mag = physics.velocity.length()
     if v_mag > 2300:
         physics.velocity = physics.velocity.rescale(2300)
 
+
 results = []
 last_normal = None
 
-def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float, renderer=None):
+
+def full_step(
+    physics: SimPhysics, controls: SimpleControllerState, dt: float, renderer=None
+):
     """
     Do the appropriate simulation based on the car and controller state
     """
     global results
     global last_normal
-    height = 36.16/2
+    height = 36.16 / 2
     result = Field.collide(make_obb(physics))
     normal = rlu_to_Vec3(result.direction)
     normal_base = rlu_to_Vec3(result.start)
@@ -199,7 +205,6 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float, r
     last_distance = 200
     if last_normal:
         last_distance = (physics.location - last_distance).length()
-
 
     if renderer:
         if len(results) > 200:
@@ -226,9 +231,9 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float, r
 
         clamp(physics)
         return physics
-       
+
     drift1 = fmod(angle_between(to_rlu_vec(orientation.up), result.direction), pi)
-    on_ground_by_orientation = abs(drift1) < ( pi / 36)  # 5 degrees
+    on_ground_by_orientation = abs(drift1) < (pi / 36)  # 5 degrees
 
     # are we on the wrong side?
     # completed screwed test:
@@ -239,30 +244,30 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float, r
         # we have to go opposite of the normal to get to inside
         physics.velocity += Vec3(0, 0, -650 * dt)
         # normal direction is INTO the wall. So subtract from that direction
-        physics.velocity -= (normal * 3000)*dt
+        physics.velocity -= (normal * 3000) * dt
         physics.location += physics.velocity * dt
         clamp(physics)
         return physics
 
     # just clipping in:
     dist_to_base = (physics.location - normal_base).dot(normal)
-    if dist_to_base - (height*0.95) < 0:
+    if dist_to_base - (height * 0.95) < 0:
         # print(f"Clipping in by {height - dist_to_base}")
         # we can raise it, OR rotate it.
         # lets raise it for now
-        physics.location += (height - dist_to_base)*normal*(dt*30)
+        physics.location += (height - dist_to_base) * normal * (dt * 30)
         result = Field.collide(make_obb(physics))
         normal = rlu_to_Vec3(result.direction)
         normal_base = rlu_to_Vec3(result.start)
- 
+
     if not on_ground_by_orientation:
         print(f"Not on ground by o: {drift1}")
-        # correct orientation 
+        # correct orientation
         angle = angle_between(to_rlu_vec(normal), to_rlu_vec(orientation.up))
         rotate_axis = cross(to_rlu_vec(normal), to_rlu_vec(orientation.up))
-        ortho = (
-            normalize(rotate_axis) * -min(angle, 2*pi*dt) # max turning of 10 radians/s
-        )
+        ortho = normalize(rotate_axis) * -min(
+            angle, 2 * pi * dt
+        )  # max turning of 10 radians/s
         rot = physics.rotation
         rot_mat_initial: mat3 = euler_to_rotation(
             rlu_vec3(rot.pitch, rot.yaw, rot.roll)
@@ -273,14 +278,13 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float, r
         physics.rotation = rot_mat_to_rot(rot_mat)
 
         physics.velocity += Vec3(0, 0, -650 * dt)
-        normal_velo = physics.velocity.dot(normal*-1)
-        physics.velocity -= (normal * normal_velo)*dt
+        normal_velo = physics.velocity.dot(normal * -1)
+        physics.velocity -= (normal * normal_velo) * dt
         # damp_nonforward(physics, orientation)
         physics.location += physics.velocity * dt
         clamp(physics)
 
         return physics
-
 
         # orientation = Orientation(physics.rotation)
 
@@ -295,33 +299,44 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float, r
     return rotate_ground_and_move(physics, dt, normal, controls)
 
 
-def not_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: float, renderer=None):
+def not_on_ground(
+    physics: SimPhysics, controls: SimpleControllerState, dt: float, renderer=None
+):
     # just fall!
     physics.velocity += Vec3(0, 0, -650 * dt)
-    physics.location += physics.velocity*dt
+    physics.location += physics.velocity * dt
     clamp(physics)
     return physics
 
 
-def stuck_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: float, collision, renderer=None):
+def stuck_on_ground(
+    physics: SimPhysics,
+    controls: SimpleControllerState,
+    dt: float,
+    collision,
+    renderer=None,
+):
     # will give you a free flip
-    height = 36.16/2
+    height = 36.16 / 2
     normal = rlu_to_Vec3(collision.direction)
     normal_base = rlu_to_Vec3(collision.start)
 
     physics.velocity += Vec3(0, 0, -650 * dt)
-    normal_velo = physics.velocity.dot(normal*-1)
+    normal_velo = physics.velocity.dot(normal * -1)
     if normal_velo > 0:
-        physics.velocity -= (normal * normal_velo)
-    physics.location += physics.velocity*dt
+        physics.velocity -= normal * normal_velo
+    physics.location += physics.velocity * dt
 
-    if (physics.location - normal_base).length() < height*0.95:
-        physics.location = normal_base + normal*height*0.99
+    if (physics.location - normal_base).length() < height * 0.95:
+        physics.location = normal_base + normal * height * 0.99
 
     clamp(physics)
     return physics
 
-def rotate_and_move_only(physics: SimPhysics, control: SimpleControllerState, dt: float, renderer=None):
+
+def rotate_and_move_only(
+    physics: SimPhysics, control: SimpleControllerState, dt: float, renderer=None
+):
     # we will now find actual normal
     result = Field.collide(make_obb(physics))
     normal = rlu_to_Vec3(result.direction)
@@ -332,7 +347,7 @@ def rotate_and_move_only(physics: SimPhysics, control: SimpleControllerState, dt
 
     orientation = Orientation(physics.rotation)
     # compare orientations
-    if normal.ang_to(orientation.up) > pi/6:
+    if normal.ang_to(orientation.up) > pi / 6:
         # 30 degrees seems like an awful a lot
         return stuck_on_ground(physics, control, dt, result, renderer)
 
@@ -342,23 +357,30 @@ def rotate_and_move_only(physics: SimPhysics, control: SimpleControllerState, dt
     clamp(physics)
     return physics
 
-def rotate_ground_and_move(physics: SimPhysics, controls: SimpleControllerState, dt: float, normal: Vec3):
+
+def rotate_ground_and_move(
+    physics: SimPhysics, controls: SimpleControllerState, dt: float, normal: Vec3
+):
     physics.velocity += Vec3(0, 0, -650 * dt)
-    normal_velo = physics.velocity.dot(normal*-1)
+    normal_velo = physics.velocity.dot(normal * -1)
     if normal_velo > 0:
-        physics.velocity -= (normal * normal_velo)*dt
+        physics.velocity -= (normal * normal_velo) * dt
 
     # steer may need to be rotated
     # if physics.velocity.dot(orientation.forward) < 0:
-        # controls.steer = -controls.steer
+    # controls.steer = -controls.steer
 
     orientation = Orientation(physics.rotation)
     orig_rot_mat = orientation.to_rot_mat()
 
     physics_prime = SimPhysics(
         Vec3(0, 0, 0),
-        Vec3(orientation.forward.dot(physics.velocity), orientation.right.dot(physics.velocity), 0),
-        physics.angular_velocity, # ground move just ignores it 
+        Vec3(
+            orientation.forward.dot(physics.velocity),
+            orientation.right.dot(physics.velocity),
+            0,
+        ),
+        physics.angular_velocity,  # ground move just ignores it
         Rotator(0, 0, 0),
     )
     # print(f"Steer: {controls.steer}, Throttle: {controls.throttle}")
@@ -368,16 +390,24 @@ def rotate_ground_and_move(physics: SimPhysics, controls: SimpleControllerState,
     # need to combine orientations
     old_yaw = physics.rotation.yaw
     new_orientation = Orientation(physics_prime.rotation)
-    physics.rotation = rot_mat_to_rot(dot(orientation.to_rot_mat(), new_orientation.to_rot_mat()))
+    physics.rotation = rot_mat_to_rot(
+        dot(orientation.to_rot_mat(), new_orientation.to_rot_mat())
+    )
 
     # unrotate other vectors
     # if physics.velocity.dot(orientation.forward) < 0:
-        # controls.steer = -controls.steer
+    # controls.steer = -controls.steer
     # inverse_rotation = transpose(orig_rot_mat)
 
-    physics.location += orientation.forward*physics_prime.location.x + orientation.right*physics_prime.location.y
-    physics.velocity = orientation.forward*physics_prime.velocity.x + orientation.right*physics_prime.velocity.y
-    physics.angular_velocity = physics_prime.angular_velocity # should be unchanged
+    physics.location += (
+        orientation.forward * physics_prime.location.x
+        + orientation.right * physics_prime.location.y
+    )
+    physics.velocity = (
+        orientation.forward * physics_prime.velocity.x
+        + orientation.right * physics_prime.velocity.y
+    )
+    physics.angular_velocity = physics_prime.angular_velocity  # should be unchanged
 
     # what are the chances that this works first try! Very small.
     clamp(physics)
@@ -385,7 +415,9 @@ def rotate_ground_and_move(physics: SimPhysics, controls: SimpleControllerState,
     return physics
 
 
-def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: float, renderer=None):
+def move_on_ground(
+    physics: SimPhysics, controls: SimpleControllerState, dt: float, renderer=None
+):
     if abs(dt) < 1e-5:
         # what? why?
         return None
@@ -397,7 +429,6 @@ def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: flo
     else:
         direction_dot = orientation.forward.dot(physics.velocity)
         direction = direction_dot / abs(direction_dot)
-
 
     # Start by assuming on ground. Will adjust things in the future
     steer = controls.steer
@@ -455,7 +486,7 @@ def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: flo
     # Presumably we should damp any non-forward velocity
     if direction != 0 and not controls.handbrake:
         damp_nonforward(physics, orientation)
-        
+
     # we are on ground make z velocity 0
     physics.velocity.z = 0
 
@@ -471,7 +502,7 @@ def move_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: flo
 
 def damp_nonforward(physics: SimPhysics, orientation: Orientation):
     direction_dot = orientation.forward.dot(physics.velocity)
-    if abs(direction_dot) <  0.1:
+    if abs(direction_dot) < 0.1:
         physics.velocity = Vec3(0, 0, 0)
         return
     direction = direction_dot / abs(direction_dot)
@@ -483,12 +514,8 @@ def damp_nonforward(physics: SimPhysics, orientation: Orientation):
     if nonforward_magnitude < 7.5:
         damp_factor = 0.5
     # damp the nonforward velo
-    nonforward_direction = (
-        physics.velocity.normalized() - forward_dir
-    ).normalized()
-    physics.velocity -= (
-        nonforward_direction * damp_factor * nonforward_magnitude
-    )
+    nonforward_direction = (physics.velocity.normalized() - forward_dir).normalized()
+    physics.velocity -= nonforward_direction * damp_factor * nonforward_magnitude
 
     nonforward_magnitude = v_mag - forward_velo
     # print(f"Nonforward mag {nonforward_magnitude}")
