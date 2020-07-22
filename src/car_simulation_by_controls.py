@@ -294,22 +294,55 @@ def full_step(physics: SimPhysics, controls: SimpleControllerState, dt: float, r
 
     return rotate_ground_and_move(physics, dt, normal, controls)
 
-def rotate_and_move_only(physics, control, dt, renderer=None):
-    # we will now find actual normal
-    height = 36.16/2
-    result = Field.collide(make_obb(physics))
-    normal = rlu_to_Vec3(result.direction)
-    normal_base = rlu_to_Vec3(result.start)
 
-    orientation = Orientation(physics.rotation)
-
-    physics.rotation = rotate_by_axis(orientation, orientation.up, normal)
-
-    rotate_ground_and_move(physics, dt, normal, control)
+def not_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: float, renderer=None):
+    # just fall!
+    physics.velocity += Vec3(0, 0, -650 * dt)
+    physics.location += physics.velocity*dt
     clamp(physics)
     return physics
 
-def rotate_ground_and_move(physics, dt, normal, controls):
+
+def stuck_on_ground(physics: SimPhysics, controls: SimpleControllerState, dt: float, collision, renderer=None):
+    # will give you a free flip
+    height = 36.16/2
+    normal = rlu_to_Vec3(collision.direction)
+    normal_base = rlu_to_Vec3(collision.start)
+
+    physics.velocity += Vec3(0, 0, -650 * dt)
+    normal_velo = physics.velocity.dot(normal*-1)
+    if normal_velo > 0:
+        physics.velocity -= (normal * normal_velo)
+    physics.location += physics.velocity*dt
+
+    if (physics.location - normal_base).length() < height*0.95:
+        physics.location = normal_base + normal*height*0.99
+
+    clamp(physics)
+    return physics
+
+def rotate_and_move_only(physics: SimPhysics, control: SimpleControllerState, dt: float, renderer=None):
+    # we will now find actual normal
+    result = Field.collide(make_obb(physics))
+    normal = rlu_to_Vec3(result.direction)
+
+    if normal.length() < 0.1:
+        # normally should be one. This just means there is no collision
+        return not_on_ground(physics, control, dt, renderer)
+
+    orientation = Orientation(physics.rotation)
+    # compare orientations
+    if normal.ang_to(orientation.up) > pi/6:
+        # 30 degrees seems like an awful a lot
+        return stuck_on_ground(physics, control, dt, result, renderer)
+
+    physics.rotation = rotate_by_axis(orientation, orientation.up, normal)
+
+    rotate_ground_and_move(physics, control, dt, normal)
+    clamp(physics)
+    return physics
+
+def rotate_ground_and_move(physics: SimPhysics, controls: SimpleControllerState, dt: float, normal: Vec3):
     physics.velocity += Vec3(0, 0, -650 * dt)
     normal_velo = physics.velocity.dot(normal*-1)
     if normal_velo > 0:
@@ -334,7 +367,6 @@ def rotate_ground_and_move(physics, dt, normal, controls):
 
     # need to combine orientations
     old_yaw = physics.rotation.yaw
-    # this doesn't work though right? Because we don't know if matching forwards is enough
     new_orientation = Orientation(physics_prime.rotation)
     physics.rotation = rot_mat_to_rot(dot(orientation.to_rot_mat(), new_orientation.to_rot_mat()))
 

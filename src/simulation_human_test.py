@@ -154,6 +154,7 @@ class SimulationHumanTest(BaseAgent):
             if self.button_data[6]:
                 self.physics.location = Vec3(0, 0, 30)
                 self.physics.velocity = Vec3(0, 0, 0)
+                self.physics.rotation = Rotator(0, 0, 0)
             
             location = Vector3(
                 self.physics.location.x,
@@ -231,6 +232,9 @@ class SimulationHumanTest(BaseAgent):
         tick_duration = cur_ts - self.last_tick_ts
         if not MODE == "USER_CAR_ONLY":
             resp = carSimStep(self.physics, controls, tick_duration, self.renderer)
+
+        if not resp:
+            print(f"No simulation for frame!: {self.count}")
         if abs(self.physics.location.x) > 4096 + 10 or abs(self.physics.location.y) > (
             5120 + 880
         ):
