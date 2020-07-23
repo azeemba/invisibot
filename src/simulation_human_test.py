@@ -16,8 +16,8 @@ from util.orientation import Orientation, relative_location
 from util.vec import Vec3
 from car_simulation_by_controls import (
     SimPhysics,
+    CarSimmer,
     rotate_and_move_only as carSimStep,
-    on_ground_detection,
     compare,
 )
 
@@ -64,6 +64,8 @@ class SimulationHumanTest(BaseAgent):
     def __init__(self, name, team, index):
         super().__init__(name, team, index)
 
+        self.car_sim: CarSimmer = None
+
         # Controls.
         pygame.init()
         screen = pygame.display.set_mode((300, 300))
@@ -76,7 +78,6 @@ class SimulationHumanTest(BaseAgent):
         self.start_ts = monotonic()
         self.last_recorded_ts = 0
         self.last_tick_ts = 0
-        self.physics: SimPhysics = None
 
         self.locations = []
         self.up = []
@@ -97,23 +98,21 @@ class SimulationHumanTest(BaseAgent):
         controls.boost = self.button_data[1]
         controls.handbrake = self.button_data[2]
 
-    def reset_physics(self, human):
+    def reset_physics(self):
         print("Resetting")
         self.last_tick_ts = monotonic()
         self.locations = []
         self.up = []
         self.forward = []
-        self.physics = SimPhysics(
-            location=Vec3(human.physics.location),
-            velocity=Vec3(human.physics.velocity),
-            angular_velocity=Vec3(human.physics.angular_velocity),
-            rotation=Rotator(human.physics.rotation.pitch, human.physics.rotation.yaw, human.physics.rotation.roll)
+        physics = SimPhysics(
+            location=Vec3(0, 0, 30),
+            velocity=Vec3(0, 0, 0),
+            angular_velocity=Vec3(0, 0, 0),
+            rotation=Rotator(0, 0, 0)
         )
+        self.car_sim = CarSimmer(physics)
 
     def mark_simulation_spots(self):
-        # offset = 100
-        # orientation = Orientation(self.physics.rotation)
-        # offset_vec = orientation.forward * offset
         self.renderer.begin_rendering()
         if len(self.locations) > 100:
             # obvious optimization but for another day
@@ -150,16 +149,16 @@ class SimulationHumanTest(BaseAgent):
         for _ in pygame.event.get():  # User did something.
             pass
 
+        if self.car_sim is None:
+            self.reset_physics()
+            return SimpleControllerState()
+
+
         if MODE == "SIM_ONLY" and self.count % 30 == 1:
-            if self.button_data[6]:
-                self.physics.location = Vec3(0, 0, 30)
-                self.physics.velocity = Vec3(0, 0, 0)
-                self.physics.rotation = Rotator(0, 0, 0)
-            
             location = Vector3(
-                self.physics.location.x,
-                self.physics.location.y,
-                self.physics.location.z,
+                self.car_sim.physics.location.x,
+                self.car_sim.physics.location.y,
+                self.car_sim.physics.location.z,
             )
 
             self.set_game_state(
@@ -169,19 +168,19 @@ class SimulationHumanTest(BaseAgent):
                             physics=Physics(
                                 location=location,
                                 rotation=Rotator(
-                                    self.physics.rotation.pitch,
-                                    self.physics.rotation.yaw,
-                                    self.physics.rotation.roll,
+                                    self.car_sim.physics.rotation.pitch,
+                                    self.car_sim.physics.rotation.yaw,
+                                    self.car_sim.physics.rotation.roll,
                                 ),
                                 velocity=Vector3(
-                                    self.physics.velocity.x,
-                                    self.physics.velocity.y,
-                                    self.physics.velocity.z,
+                                    self.car_sim.physics.velocity.x,
+                                    self.car_sim.physics.velocity.y,
+                                    self.car_sim.physics.velocity.z,
                                 ),
                                 angular_velocity=Vector3(
-                                    self.physics.angular_velocity.x,
-                                    self.physics.angular_velocity.y,
-                                    self.physics.angular_velocity.z,
+                                    self.car_sim.physics.angular_velocity.x,
+                                    self.car_sim.physics.angular_velocity.y,
+                                    self.car_sim.physics.angular_velocity.z,
                                 ),
                             )
                         )
@@ -192,7 +191,6 @@ class SimulationHumanTest(BaseAgent):
         if not packet.game_info.is_round_active:
             return SimpleControllerState()
         human = packet.game_cars[0]
-        # on_ground_detection(human.physics)
 
         cur_ts = monotonic()
         self.count += 1
@@ -205,10 +203,6 @@ class SimulationHumanTest(BaseAgent):
             )
 
         # self.collect_nonforward_velocity(human, cur_ts)
-
-        if self.physics is None:
-            self.reset_physics(human)
-            return SimpleControllerState()
 
         self.mark_simulation_spots()
 
@@ -223,7 +217,7 @@ class SimulationHumanTest(BaseAgent):
             self.axis_data[i] = axis
 
         if self.button_data[6]:
-            self.reset_physics(human)
+            self.reset_physics()
 
         # Update controls.
         controls = SimpleControllerState()
@@ -231,11 +225,9 @@ class SimulationHumanTest(BaseAgent):
         # print("Sending controls", controls.throttle)
         tick_duration = cur_ts - self.last_tick_ts
         if not MODE == "USER_CAR_ONLY":
-            resp = carSimStep(self.physics, controls, tick_duration, self.renderer)
+            self.car_sim.tick(controls, tick_duration)
 
-        if not resp:
-            print(f"No simulation for frame!: {self.count}")
-        if abs(self.physics.location.x) > 4096 + 10 or abs(self.physics.location.y) > (
+        if abs(self.car_sim.physics.location.x) > 4096 + 10 or abs(self.car_sim.physics.location.y) > (
             5120 + 880
         ):
             print("Car out of view")
@@ -244,12 +236,12 @@ class SimulationHumanTest(BaseAgent):
         self.compare_helpers["last_ts"] = cur_ts
         self.compare_helpers["controls"] = controls
 
-        if not MODE == "USER_CAR_ONLY" and resp:
+        if not MODE == "USER_CAR_ONLY":
             self.last_tick_ts = cur_ts
 
             if cur_ts - self.last_recorded_ts > 0.05:
-                o = Orientation(self.physics.rotation)
-                self.locations.append(Vec3(self.physics.location))
+                o = Orientation(self.car_sim.physics.rotation)
+                self.locations.append(Vec3(self.car_sim.physics.location))
                 self.up.append(o.up)
                 self.forward.append(o.forward)
                 self.last_recorded_ts = cur_ts

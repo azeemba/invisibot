@@ -52,6 +52,17 @@ class SimPhysics:
             rotation=SimPhysics.r(p_.rotation),
         )
 
+class CarSimmer:
+    def __init__(self, physics: SimPhysics, renderer=None):
+        self.physics: SimPhysics = physics
+        self.renderer = renderer
+    
+    def reset(self, physics: SimPhysics):
+        self.physics = physics
+
+    def tick(self, controls: SimpleControllerState, dt: float):
+        return rotate_and_move_only(self.physics, controls, dt, self.renderer)
+
 
 def printO(o: Orientation):
     print(f"f: {o.forward}, r: {o.right}, u: {o.up}")
@@ -135,38 +146,6 @@ def compare(
     print(
         f"Off by: v: {velo}:{velo.length():3f}, p: {loc}:{loc.length():3f}, rot: {rot}:{rot.length():3f}"
     )
-
-
-def on_ground_detection(p):
-    assert False
-    physics: SimPhysics = SimPhysics(
-        Vec3(p.location), Vec3(p.velocity), Vec3(p.angular_velocity), p.rotation
-    )
-
-    r = 60  # car radius
-    height = 30  # should be 17 but sometimes the curves are wonky
-    result = Field.collide(make_obb(physics))
-
-    updated_location = rlu_to_Vec3(result.start)
-    normal = rlu_to_Vec3(result.direction)
-
-    # validate that we roughly match being on ground.
-
-    # Use height for now
-    orientation = Orientation(physics.rotation)
-    drift1 = fmod(angle_between(to_rlu_vec(orientation.up), result.direction), pi)
-    on_ground_by_orientation = drift1 < (
-        pi / 13
-    )  # 15 degrees, normal "up" is not perfectly 0
-
-    drift2 = physics.location - updated_location
-    on_ground_by_distance = drift2.length() < height  # car height
-
-    on_ground = on_ground_by_orientation and on_ground_by_distance
-    if not on_ground:
-        print(f"Not on ground: o: {drift1}, d: {drift2.length()}")
-    else:
-        print(f"GROUNDDDDD ------ o: {drift1}, d: {drift2.length()} ----------")
 
 
 def clamp(physics):
