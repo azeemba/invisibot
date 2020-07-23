@@ -4,36 +4,21 @@ It uses an internals of a different bot and adds
 hiding/unhiding as appropriate.
 """
 
-from time import monotonic
 from os import path
 
-import importlib
 from rlbot.utils.class_importer import import_agent
 
 botlib = import_agent(path.abspath('Kamael/Kamael.py'))
 BaseBot = botlib.get_loaded_class()
-
-# import os
-# import importlib
-# import sys
-
-# botdir = os.path.abspath('src/Diablo')
-# sys.path.insert(0, botdir)
-# print(botdir)
-# importlib.invalidate_caches()
-# botmodule = importlib.import_module('Diablo.diablo')
-# dir(botmodule)
-# importlib.invalidate_caches()
-# BaseBot = botmodule.diabloBot
-# del sys.path[0]
-
-# from Diablo import diablo as BaseBot
 
 from rlbot.agents.base_agent import SimpleControllerState
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 from rlbot.utils.game_state_util import GameState, CarState, Physics, Vector3, Rotator
 
 from car_simulation_by_controls import SimPhysics, CarSimmer, Vec3
+
+DEBUG = True
+PROXIMITY = 2000
 
 # To implement list:
 # - Hide when no opponent or ball is close
@@ -65,6 +50,11 @@ class InvisibotWrapper(BaseBot):
         Depending on hidden state, either sim resulting controls
         or forward the bot controls
         """
+        if DEBUG:
+            if self.__car_sim.renderer is None:
+                self.__car_sim.renderer = self.renderer
+            self.__car_sim.mark_location()
+    
         cur_time = packet.game_info.seconds_elapsed
         dt = cur_time - self.__timestamp
         self.__timestamp = cur_time
@@ -108,8 +98,8 @@ class InvisibotWrapper(BaseBot):
         controls: SimpleControllerState = super().get_output(packet)
 
         ball = Vec3(packet.game_ball.physics.location)
-        is_ball_near = (ball - pre_location).length() < 500
-        is_enemy_near = self.__min_enemy_dist(packet, pre_location) < 500
+        is_ball_near = (ball - pre_location).length() < PROXIMITY
+        is_enemy_near = self.__min_enemy_dist(packet, pre_location) < PROXIMITY
 
         anything_near = is_ball_near or is_enemy_near
 

@@ -3,7 +3,7 @@ Module to do rough car simulation based on SimpleControllerState
 """
 from time import monotonic
 from dataclasses import dataclass
-from math import atan2, pi
+from math import atan2, pi, ceil
 
 from rlbot.utils.game_state_util import Rotator
 from rlbot.agents.base_agent import SimpleControllerState
@@ -58,15 +58,21 @@ class SimPhysics:
         )
 
 class CarSimmer:
-    def __init__(self, physics: SimPhysics, renderer=None):
+    def __init__(self, physics: SimPhysics):
         self.physics: SimPhysics = physics
         self.boost = 100 # allow to be set later
-        self.renderer = renderer
+        self.renderer = None
         self.rlu_car = RLUCar()
         self.is_rlu_updated = False
 
         self.last_base = Vec3(0, 0, -1000)
         self.last_normal = Vec3(0, 0, 1)
+
+        self.count = 0
+        self.index = 0
+        self.locations = []
+        self.up = []
+        self.forward = []
     
     def reset(self, physics: SimPhysics):
         self.physics = physics
@@ -111,7 +117,47 @@ class CarSimmer:
         self.physics.rotation = Orientation.from_rot_mat(self.rlu_car.orientation)
         self.boost = self.rlu_car.boost
 
+    def mark_location(self):
+        N = 200
+        rate = 30
+        if not self.renderer:
+            return
+        
+        # use as a ring buffer, list has N items
+        # self.index marks the spot between latest and oldest
+
+        if self.count % rate != 0:
+            self.index = (self.index + 1) % N
+            o = Orientation(self.physics.rotation)
+            location = Vec3(self.physics.location)
+            if len(self.locations) <= self.index:
+                self.locations.append(location)
+                self.up.append(o.up)
+                self.forward.append(o.forward)
+            else:
+                self.locations[self.index] = location
+                self.up[self.index] = o.up
+                self.forward[self.index] = o.forward
+
+        self.renderer.begin_rendering()
+
+        end = len(self.locations)
+        for index in range(self.index + 1, self.index + end):
+            i = index % end
+            loc = self.locations[i]
+            component = float(i) / len(self.locations)
+            inverse = 1 - component
+            color = self.renderer.create_color(
+                255, ceil(255 * component), ceil(255 * inverse / 2), ceil(255 * inverse)
+            )
+            self.renderer.draw_rect_3d(loc, 4, 4, True, color, centered=True)
+            self.renderer.draw_line_3d(loc, loc + (self.up[i] * 200), color)
+
+        self.renderer.end_rendering()
+
     def tick(self, controls: SimpleControllerState, dt: float):
+        self.count += 1
+        self.mark_location()
         # we will now find actual normal
         result = Field.collide(make_obb(self.physics))
         normal = rlu_to_Vec3(result.direction)
