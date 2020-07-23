@@ -47,7 +47,7 @@ class TestBot(BaseAgent):
         if not self.car_sim:
             assert False, "immpossible!"
 
-        dt = self.ts - monotonic()
+        dt = monotonic() - self.ts
         self.ts = monotonic()
         c = SimpleControllerState(steer=self.turn, throttle=1, boost=True)
         self.car_sim.tick(c, dt)

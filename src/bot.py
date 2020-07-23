@@ -96,7 +96,6 @@ class Invisibot(BaseAgent):
     def unhide(self, packet: GameTickPacket):
         print("unhide")
         r = self.car_sim.physics.rotation
-        print(r)
         p = Physics(
             location=revector3(self.car_sim.physics.location),
             velocity=revector3(self.car_sim.physics.velocity),
@@ -152,7 +151,7 @@ class Invisibot(BaseAgent):
 
         if not packet.game_info.is_round_active:
             return SimpleControllerState()
-        tick_time = self.timestamp - monotonic()
+        tick_time = monotonic() - self.timestamp
         self.timestamp = monotonic()
 
         # Keep our boost pad info updated with which pads are currently active
