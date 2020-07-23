@@ -1,6 +1,7 @@
 """
 Module to do rough car simulation based on SimpleControllerState
 """
+from time import monotonic
 from dataclasses import dataclass
 from math import atan2, pi, fmod, ceil
 
@@ -22,7 +23,7 @@ from rlutilities.linear_algebra import (
     normalize,
     cross,
 )
-from rlutilities.simulation import Game, Field, obb
+from rlutilities.simulation import Game, Field, obb, Car as RLUCar, Input as RLUInput
 
 from util.vec import Vec3
 from util.orientation import Orientation, relative_location
@@ -55,25 +56,103 @@ class SimPhysics:
 class CarSimmer:
     def __init__(self, physics: SimPhysics, renderer=None):
         self.physics: SimPhysics = physics
+        self.boost = 100 # allow to be set later
         self.renderer = renderer
+        self.rlu_car = RLUCar()
+        self.is_rlu_updated = False
+
+        self.last_base = Vec3(0, 0, -1000)
+        self.last_normal = Vec3(0, 0, 1)
     
     def reset(self, physics: SimPhysics):
         self.physics = physics
+        self._set_rlu_car()
+
+    def _set_rlu_car(self):
+        c = self.rlu_car
+        c.position = to_rlu_vec(self.physics.location)
+        c.velocity = to_rlu_vec(self.physics.velocity)
+        c.angular_velocity = to_rlu_vec(self.physics.angular_velocity)
+        c.orientation = Orientation(self.physics.rotation).to_rot_mat()
+
+        c.boost = self.boost
+        c.jumped = False
+        c.double_jumped = False
+        c.on_ground = True
+        c.team = 0
+        c.time = monotonic()
+        self.is_rlu_updated = True
+
+    def _make_input(self, controls):
+        inputs = RLUInput()
+        fields = ['boost', 'handbrake', 'jump', 'pitch', 'roll', 'steer', 'throttle', 'yaw']
+        for f in fields:
+            setattr(inputs, f, getattr(controls, f))
+        return inputs
+
+    def _rlu_step(self, controls, dt, on_ground):
+        # we think RLU sims this situation better
+        print("RLU sim")
+        if not self.is_rlu_updated:
+            self._set_rlu_car()
+        
+        self.rlu_car.on_ground = on_ground
+
+        inputs = self._make_input(controls)
+        self.rlu_car.step(inputs, dt)
+
+        self.physics.location = rlu_to_Vec3(self.rlu_car.position)
+        self.physics.velocity = rlu_to_Vec3(self.rlu_car.velocity)
+        self.physics.angular_velocity = rlu_to_Vec3(self.rlu_car.angular_velocity)
+        self.physics.rotation = Orientation.from_rot_mat(self.rlu_car.orientation)
+        self.boost = self.rlu_car.boost
 
     def tick(self, controls: SimpleControllerState, dt: float):
-        return rotate_and_move_only(self.physics, controls, dt, self.renderer)
+        # we will now find actual normal
+        result = Field.collide(make_obb(self.physics))
+        normal = rlu_to_Vec3(result.direction)
+
+        on_ground = True
+
+        if normal.length() < 0.1: 
+            # normally should be one. This just means there is no collision
+            last_distance = (self.last_base - self.physics.location).length()
+            if last_distance > (36.16 / 2)*1.05:
+                on_ground = False
+            normal = self.last_normal
+        else:
+            self.last_base = clamp_location(rlu_to_Vec3(result.start))
+            self.last_normal = normal
+
+        if not on_ground or controls.jump:
+            self._rlu_step(controls, dt, on_ground)
+            clamp(self.physics)
+            return self.physics
+
+        self.is_rlu_updated = False
+        orientation = Orientation(self.physics.rotation)
+        # compare orientations
+        if normal.ang_to(orientation.up) > pi / 6:
+            # 30 degrees seems like an awful a lot
+            return stuck_on_ground(self.physics, controls, dt, result, self.renderer)
+
+        self.physics.rotation = rotate_by_axis(orientation, orientation.up, normal)
+
+        rotate_ground_and_move(self.physics, controls, dt, normal)
+        clamp(self.physics)
+        return self.physics
 
 
 def printO(o: Orientation):
     print(f"f: {o.forward}, r: {o.right}, u: {o.up}")
 
 
-def rotate_by_axis(orientation: Orientation, original: Vec3, target: Vec3) -> Rotator:
+def rotate_by_axis(orientation: Orientation, original: Vec3, target: Vec3, percent=1) -> Rotator:
     """
     Updates the given orientation's original direction to the target direction.
     original should be `orientation.forward` or `orientation.up` or `orientation.right`
     """
-    angle = angle_between(to_rlu_vec(target), to_rlu_vec(original))
+    angle = angle_between(to_rlu_vec(target), to_rlu_vec(original))*percent
     rotate_axis = cross(to_rlu_vec(target), to_rlu_vec(original))
     ortho = normalize(rotate_axis) * -angle
     rot_mat_initial: mat3 = orientation.to_rot_mat()
@@ -147,16 +226,18 @@ def compare(
         f"Off by: v: {velo}:{velo.length():3f}, p: {loc}:{loc.length():3f}, rot: {rot}:{rot.length():3f}"
     )
 
+def clamp_location(location: Vec3):
+    height = 0  # 36.16/2.0 * 0.99
+    location.z = max(height, location.z)
+    location.x = min(max(-4096 + height, location.x), 4096 - height)
+    location.y = min(
+        max(-5120 - 880 + height, location.y), 5120 + 880 - height
+    )
+    return location
 
 def clamp(physics):
     # This is a coarse clamping.
-    height = 0  # 36.16/2.0 * 0.99
-    physics.location.z = max(height, physics.location.z)
-    physics.location.x = min(max(-4096 + height, physics.location.x), 4096 - height)
-    physics.location.y = min(
-        max(-5120 - 880 + height, physics.location.y), 5120 + 880 - height
-    )
-
+    clamp_location(physics.location)
     v_mag = physics.velocity.length()
     if v_mag > 2300:
         physics.velocity = physics.velocity.rescale(2300)
@@ -308,6 +389,11 @@ def stuck_on_ground(
 
     if (physics.location - normal_base).length() < height * 0.95:
         physics.location = normal_base + normal * height * 0.99
+
+    # update orientation so that in 0.5 seconds we have correct orientation
+    orientation = Orientation(physics.rotation)
+    physics.rotation = rotate_by_axis(orientation, orientation.up, normal, dt/0.5)
+
 
     clamp(physics)
     return physics
