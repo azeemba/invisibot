@@ -41,6 +41,14 @@ class SimPhysics:
         return Rotator(r_.pitch, r_.yaw, r_.roll)
 
     @staticmethod
+    def empty():
+        return SimPhysics(
+            Vec3(0,0,0),
+            Vec3(0, 0, 0),
+            Vec3(0, 0, 0),
+            Rotator(0, 0, 0))
+
+    @staticmethod
     def p(p_):
         return SimPhysics(
             location=Vec3(p_.location),
