@@ -4,14 +4,14 @@ from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 from rlbot.utils.game_state_util import GameState, CarState, Physics, Vector3, Rotator
 
-from car_simulation_by_controls import SimPhysics, full_step as carSimStep
+from car_simulation_by_controls import SimPhysics, CarSimmer
 class TestBot(BaseAgent):
     def __init__(self, name, team, index):
         super().__init__(name, team, index)
         self.init = False
         self.count = 0
         self.ts = monotonic()
-        self.physics = None
+        self.car_sim = None
 
         self.turn = 1
 
@@ -39,22 +39,18 @@ class TestBot(BaseAgent):
                 rotation=Rotator(0, 0, 0))
             self.set_car(p)
             self.ts = monotonic()
-            self.physics = SimPhysics.p(p)
+            self.car_sim = CarSimmer(SimPhysics.p(p), self.renderer)
             self.init = True
 
             return SimpleControllerState()
 
-        if not self.physics:
+        if not self.car_sim:
             assert False, "immpossible!"
 
         dt = self.ts - monotonic()
         self.ts = monotonic()
         c = SimpleControllerState(steer=self.turn, throttle=1, boost=True)
-        carSimStep(
-            self.physics,
-            c,
-            dt,
-            self.renderer)
+        self.car_sim.tick(c, dt)
 
         self.count += 1
 
@@ -63,27 +59,27 @@ class TestBot(BaseAgent):
 
         if self.count % 20 == 0:
             location = Vector3(
-                self.physics.location.x,
-                self.physics.location.y,
-                self.physics.location.z,
+                self.car_sim.physics.location.x,
+                self.car_sim.physics.location.y,
+                self.car_sim.physics.location.z,
             )
             self.set_car(
                 Physics(
                     location=location,
                     rotation=Rotator(
-                        self.physics.rotation.pitch,
-                        -self.physics.rotation.yaw,
-                        self.physics.rotation.roll,
+                        self.car_sim.physics.rotation.pitch,
+                        self.car_sim.physics.rotation.yaw,
+                        self.car_sim.physics.rotation.roll,
                     ),
                     velocity=Vector3(
-                        -self.physics.velocity.x,
-                        -self.physics.velocity.y,
-                        -self.physics.velocity.z,
+                        self.car_sim.physics.velocity.x,
+                        self.car_sim.physics.velocity.y,
+                        self.car_sim.physics.velocity.z,
                     ),
                     angular_velocity=Vector3(
-                        self.physics.angular_velocity.x,
-                        self.physics.angular_velocity.y,
-                        self.physics.angular_velocity.z,
+                        self.car_sim.physics.angular_velocity.x,
+                        self.car_sim.physics.angular_velocity.y,
+                        self.car_sim.physics.angular_velocity.z,
                     )
                 )
             )

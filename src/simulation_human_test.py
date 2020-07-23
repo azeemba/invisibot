@@ -6,19 +6,16 @@ example code from pygame: https://www.pygame.org/docs/ref/joystick.html#pygame.j
 """
 
 from math import ceil
-from time import sleep, monotonic
+from time import monotonic
 import json
 
-from rlbot.agents.base_script import BaseScript
 from rlbot.utils.game_state_util import Vector3, Rotator, GameState, CarState, Physics
 
-from util.orientation import Orientation, relative_location
+from util.orientation import Orientation
 from util.vec import Vec3
 from car_simulation_by_controls import (
     SimPhysics,
-    CarSimmer,
-    rotate_and_move_only as carSimStep,
-    compare,
+    CarSimmer
 )
 
 from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
@@ -194,15 +191,6 @@ class SimulationHumanTest(BaseAgent):
 
         cur_ts = monotonic()
         self.count += 1
-        if self.count % 30 == 0 and MODE == "USER_CAR_ONLY":
-            compare(
-                self.compare_helpers["last_phys"],
-                self.compare_helpers["controls"],
-                SimPhysics.p(human.physics),
-                cur_ts - self.compare_helpers["last_ts"],
-            )
-
-        # self.collect_nonforward_velocity(human, cur_ts)
 
         self.mark_simulation_spots()
 

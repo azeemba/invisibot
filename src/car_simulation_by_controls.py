@@ -3,21 +3,17 @@ Module to do rough car simulation based on SimpleControllerState
 """
 from time import monotonic
 from dataclasses import dataclass
-from math import atan2, pi, fmod, ceil
+from math import atan2, pi
 
 from rlbot.utils.game_state_util import Rotator
 from rlbot.agents.base_agent import SimpleControllerState
 
 from rlutilities.linear_algebra import (
     vec3 as rlu_vec3,
-    euler_to_rotation,
     mat3,
-    mat4,
     dot,
     norm,
     vec2 as rlu_vec2,
-    vec4 as rlu_vec4,
-    transpose,
     angle_between,
     axis_to_rotation,
     normalize,
@@ -26,7 +22,7 @@ from rlutilities.linear_algebra import (
 from rlutilities.simulation import Game, Field, obb, Car as RLUCar, Input as RLUInput
 
 from util.vec import Vec3
-from util.orientation import Orientation, relative_location
+from util.orientation import Orientation
 
 # only use it for `Field` to be initialized.
 g = Game()
@@ -184,7 +180,7 @@ def rlu_to_Vec3(v) -> Vec3:
     return Vec3(v[0], v[1], v[2])
 
 
-def rotate_vector(v: Vec3, r: mat3, around: Vec3 = None) -> Vec3:
+def rotate_vector(v: Vec3, r: mat3) -> Vec3:
     out = dot(r, to_rlu_vec(v))
     return Vec3(out[0], out[1], out[2])
 
@@ -243,132 +239,6 @@ def clamp(physics):
         physics.velocity = physics.velocity.rescale(2300)
 
 
-results = []
-last_normal = None
-
-
-def full_step(
-    physics: SimPhysics, controls: SimpleControllerState, dt: float, renderer=None
-):
-    """
-    Do the appropriate simulation based on the car and controller state
-    """
-    global results
-    global last_normal
-    height = 36.16 / 2
-    result = Field.collide(make_obb(physics))
-    normal = rlu_to_Vec3(result.direction)
-    normal_base = rlu_to_Vec3(result.start)
-    on_ground = (normal - Vec3(0, 0, 0)).length() > 1e-9
-    # normal usually has length 1, unless there is no normal
-
-    last_distance = 200
-    if last_normal:
-        last_distance = (physics.location - last_distance).length()
-
-    if renderer:
-        if len(results) > 200:
-            results = results[-200:]
-        results.append((normal, normal_base))
-        renderer.begin_rendering()
-        for i in range(len(results)):
-            loc = results[i][1]
-            component = float(i) / len(results)
-            inverse = 1 - component
-            color = renderer.create_color(
-                255, ceil(255 * component), ceil(255 * inverse / 2), ceil(255 * inverse)
-            )
-            renderer.draw_rect_3d(loc, 4, 4, True, color, centered=True)
-            renderer.draw_line_3d(loc, loc + (results[i][0] * 200), color)
-        renderer.end_rendering()
-
-    # print(f"{normal}, {orientation.up}")
-    orientation = Orientation(physics.rotation)
-    if not on_ground:
-        print(f"Not on ground by {last_distance}")
-        physics.velocity += Vec3(0, 0, -650 * dt)
-        physics.location += physics.velocity * dt
-
-        clamp(physics)
-        return physics
-
-    drift1 = fmod(angle_between(to_rlu_vec(orientation.up), result.direction), pi)
-    on_ground_by_orientation = abs(drift1) < (pi / 36)  # 5 degrees
-
-    # are we on the wrong side?
-    # completed screwed test:
-    inside_point = Vec3(0, 0, 100)
-    dist_to_inside = (inside_point - normal_base).dot(normal)
-    if dist_to_inside < 0:
-        print(f"Way inside: {dist_to_inside}")
-        # we have to go opposite of the normal to get to inside
-        physics.velocity += Vec3(0, 0, -650 * dt)
-        # normal direction is INTO the wall. So subtract from that direction
-        physics.velocity -= (normal * 3000) * dt
-        physics.location += physics.velocity * dt
-        clamp(physics)
-        return physics
-
-    # just clipping in:
-    dist_to_base = (physics.location - normal_base).dot(normal)
-    if dist_to_base - (height * 0.95) < 0:
-        # print(f"Clipping in by {height - dist_to_base}")
-        # we can raise it, OR rotate it.
-        # lets raise it for now
-        physics.location += (height - dist_to_base) * normal * (dt * 30)
-        result = Field.collide(make_obb(physics))
-        normal = rlu_to_Vec3(result.direction)
-        normal_base = rlu_to_Vec3(result.start)
-
-    if not on_ground_by_orientation:
-        print(f"Not on ground by o: {drift1}")
-        # correct orientation
-        angle = angle_between(to_rlu_vec(normal), to_rlu_vec(orientation.up))
-        rotate_axis = cross(to_rlu_vec(normal), to_rlu_vec(orientation.up))
-        ortho = normalize(rotate_axis) * -min(
-            angle, 2 * pi * dt
-        )  # max turning of 10 radians/s
-        rot = physics.rotation
-        rot_mat_initial: mat3 = euler_to_rotation(
-            rlu_vec3(rot.pitch, rot.yaw, rot.roll)
-        )
-        rot_mat_adj = axis_to_rotation(ortho)
-
-        rot_mat = dot(rot_mat_adj, rot_mat_initial)
-        physics.rotation = rot_mat_to_rot(rot_mat)
-
-        physics.velocity += Vec3(0, 0, -650 * dt)
-        normal_velo = physics.velocity.dot(normal * -1)
-        physics.velocity -= (normal * normal_velo) * dt
-        # damp_nonforward(physics, orientation)
-        physics.location += physics.velocity * dt
-        clamp(physics)
-
-        return physics
-
-        # orientation = Orientation(physics.rotation)
-
-        # target_right = cross(to_rlu_vec(normal), to_rlu_vec(orientation.forward))
-        # angle = angle_between(target_right, to_rlu_vec(orientation.right))
-        # ortho = normalize(cross(target_right, to_rlu_vec(orientation.right)))*angle
-        # rot_mat_adj = axis_to_rotation(ortho)
-
-        # rot_mat = dot(rot_mat_adj, rot_mat_initial)
-        # physics.rotation = rot_mat_to_rot(rot_mat)
-
-    return rotate_ground_and_move(physics, dt, normal, controls)
-
-
-def not_on_ground(
-    physics: SimPhysics, controls: SimpleControllerState, dt: float, renderer=None
-):
-    # just fall!
-    physics.velocity += Vec3(0, 0, -650 * dt)
-    physics.location += physics.velocity * dt
-    clamp(physics)
-    return physics
-
-
 def stuck_on_ground(
     physics: SimPhysics,
     controls: SimpleControllerState,
@@ -376,7 +246,7 @@ def stuck_on_ground(
     collision,
     renderer=None,
 ):
-    # will give you a free flip
+    # just keep it above ground and slight start rotating
     height = 36.16 / 2
     normal = rlu_to_Vec3(collision.direction)
     normal_base = rlu_to_Vec3(collision.start)
@@ -395,30 +265,6 @@ def stuck_on_ground(
     physics.rotation = rotate_by_axis(orientation, orientation.up, normal, dt/0.5)
 
 
-    clamp(physics)
-    return physics
-
-
-def rotate_and_move_only(
-    physics: SimPhysics, control: SimpleControllerState, dt: float, renderer=None
-):
-    # we will now find actual normal
-    result = Field.collide(make_obb(physics))
-    normal = rlu_to_Vec3(result.direction)
-
-    if normal.length() < 0.1:
-        # normally should be one. This just means there is no collision
-        return not_on_ground(physics, control, dt, renderer)
-
-    orientation = Orientation(physics.rotation)
-    # compare orientations
-    if normal.ang_to(orientation.up) > pi / 6:
-        # 30 degrees seems like an awful a lot
-        return stuck_on_ground(physics, control, dt, result, renderer)
-
-    physics.rotation = rotate_by_axis(orientation, orientation.up, normal)
-
-    rotate_ground_and_move(physics, control, dt, normal)
     clamp(physics)
     return physics
 
