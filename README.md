@@ -1,17 +1,11 @@
-# RLBotPythonExample
-Example of a Python bot using the RLBot framework
+# Invisibot
 
-## Quick Start
-The easiest way to start a Python bot is demonstrated here!
-https://youtu.be/YJ69QZ-EX7k
+Invisibot is Rocket League bot that has invisiblity powers. 
 
-It shows you how to:
-- Install the RLBot GUI
-- Use it to create a new bot
+It is powered by Kamael and RLUtilities.
 
-## Changing the bot
+# Status
 
-- Bot behavior is controlled by `src/bot.py`
-- Bot appearance is controlled by `src/appearance.cfg`
+The bot works, however it makes Kamael significantly worse. The biggest
+issue seems to be that the flip simulation is not behaving normally.
 
-See https://github.com/RLBot/RLBotPythonExample/wiki for documentation and tutorials.
