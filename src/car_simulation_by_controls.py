@@ -60,7 +60,8 @@ class SimPhysics:
 class CarSimmer:
     def __init__(self, physics: SimPhysics):
         self.physics: SimPhysics = physics
-        self.boost = 100 # allow to be set later
+        self.boost = 100 # Right now always a 100
+
         self.renderer = None
         self.rlu_car = RLUCar()
         self.is_rlu_updated = False
@@ -77,6 +78,18 @@ class CarSimmer:
     def reset(self, physics: SimPhysics):
         self.physics = physics
         self._set_rlu_car()
+
+    def is_jumped(self):
+        return self.is_rlu_updated and self.rlu_car.jumped
+
+    def is_double_jumped(self):
+        return self.is_rlu_updated and self.rlu_car.double_jumped
+    
+    def is_on_ground(self):
+        return not self.is_rlu_updated
+
+    def is_supersonic(self):
+        return self.physics.velocity.length() > 2200
 
     def _set_rlu_car(self):
         c = self.rlu_car
@@ -102,7 +115,7 @@ class CarSimmer:
 
     def _rlu_step(self, controls, dt, on_ground):
         # we think RLU sims this situation better
-        print("RLU sim")
+        print(f"{self.count}: rlusim")
         if not self.is_rlu_updated:
             self._set_rlu_car()
         
@@ -115,7 +128,7 @@ class CarSimmer:
         self.physics.velocity = rlu_to_Vec3(self.rlu_car.velocity)
         self.physics.angular_velocity = rlu_to_Vec3(self.rlu_car.angular_velocity)
         self.physics.rotation = Orientation.from_rot_mat(self.rlu_car.orientation)
-        self.boost = self.rlu_car.boost
+        # self.boost = self.rlu_car.boost
 
     def mark_location(self):
         N = 200
@@ -167,8 +180,9 @@ class CarSimmer:
         if normal.length() < 0.1: 
             # normally should be one. This just means there is no collision
             last_distance = (self.last_base - self.physics.location).length()
-            if last_distance > (36.16 / 2)*1.05:
+            if last_distance > (36.16 / 2)*1.01:
                 on_ground = False
+                self.last_base.z = 1e5
             normal = self.last_normal
         else:
             self.last_base = clamp_location(rlu_to_Vec3(result.start))

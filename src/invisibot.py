@@ -21,12 +21,8 @@ DEBUG = True
 PROXIMITY = 2000
 
 # To implement list:
-# - Hide when no opponent or ball is close
-# - Unhide when an opponent or ball is close
-# - Refuseto hide for some cooldown period
 # - Reset between goals
 # - If simulation stuck in same location for multiple ticks, unhide
-# - Check if unhiding finished
 # - Boost tracking
 
 # Import appropriate bot as BaseBot
@@ -86,14 +82,16 @@ class InvisibotWrapper(BaseBot):
             pre_location = Vec3(packet_car.physics.location)
         else:
             # manipulate the packet
-            sim = self.__car_sim.physics
+            sim = self.__car_sim
             self.__load_physics(packet_car.physics)
 
-            # TODO: additional things to change
-            # wheel_touched, boost, jump
-            # need CarSimmer to expose some of them
+            packet_car.boost = sim.boost
+            packet_car.is_super_sonic = sim.is_supersonic()
+            packet_car.has_wheel_contact = sim.is_on_ground()
+            packet_car.double_jumped = sim.is_double_jumped()
+            packet_car.jumped = sim.is_jumped()
 
-            pre_location = sim.location
+            pre_location = sim.physics.location
 
         controls: SimpleControllerState = super().get_output(packet)
 
@@ -148,8 +146,15 @@ class InvisibotWrapper(BaseBot):
         print("Here I am!")
         p = Physics(Vector3(), Rotator(), Vector3(), Vector3())
         self.__load_physics(p)
+        sim = self.__car_sim
         state = GameState(
-            cars={self.index: CarState(physics=p, boost_amount=self.__car_sim.boost)}
+            cars={
+                self.index: CarState(
+                    physics=p,
+                    boost_amount=sim.boost,
+                    jumped=sim.is_jumped(),
+                    double_jumped=sim.is_double_jumped())
+            }
         )
         self.set_game_state(state)
         self.__hidden = False
