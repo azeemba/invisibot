@@ -117,7 +117,7 @@ class CarSimmer:
 
     def _rlu_step(self, controls, dt, on_ground):
         # we think RLU sims this situation better
-        print(f"{self.count}: rlusim")
+        # print(f"{self.count}: rlusim")
         if not self.is_rlu_updated:
             self._set_rlu_car()
         

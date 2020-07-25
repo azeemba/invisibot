@@ -17,7 +17,7 @@ from rlbot.utils.game_state_util import GameState, CarState, Physics, Vector3, R
 
 from car_simulation_by_controls import SimPhysics, CarSimmer, Vec3
 
-DEBUG = True
+DEBUG = False
 PROXIMITY = 1000
 
 # To implement list:
@@ -111,7 +111,8 @@ class InvisibotWrapper(BaseBot):
             self.__hide(packet_car)
 
         if self.__count % 30 == 0:
-            print(f"{is_ball_near} {is_enemy_near} {anything_near} {self.__in_cooldown()}")
+            # print(f"{is_ball_near} {is_enemy_near} {anything_near} {self.__in_cooldown()}")
+            pass
 
         if self.__hidden:
             self.__car_sim.tick(controls, dt)
@@ -153,9 +154,9 @@ class InvisibotWrapper(BaseBot):
             cars={
                 self.index: CarState(
                     physics=p,
-                    boost_amount=sim.boost,
-                    jumped=sim.is_jumped(),
-                    double_jumped=sim.is_double_jumped())
+                    boost_amount=sim.boost)
+                    # jumped=sim.is_jumped(),
+                    # double_jumped=sim.is_double_jumped())
             }
         )
         self.set_game_state(state)
