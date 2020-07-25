@@ -68,6 +68,8 @@ class CarSimmer:
 
         self.last_base = Vec3(0, 0, -1000)
         self.last_normal = Vec3(0, 0, 1)
+        self.last_was_jump = False
+        self.airtime = 0
 
         self.count = 0
         self.index = 0
@@ -103,7 +105,7 @@ class CarSimmer:
         c.double_jumped = False
         c.on_ground = True
         c.team = 0
-        c.time = monotonic()
+        c.time = 0
         self.is_rlu_updated = True
 
     def _make_input(self, controls):
@@ -171,6 +173,13 @@ class CarSimmer:
     def tick(self, controls: SimpleControllerState, dt: float):
         self.count += 1
         self.mark_location()
+
+        was_ground = self.is_on_ground()
+        if not was_ground:
+            self.airtime += dt
+        else:
+            self.airtime = 0
+
         # we will now find actual normal
         result = Field.collide(make_obb(self.physics))
         normal = rlu_to_Vec3(result.direction)
@@ -189,10 +198,23 @@ class CarSimmer:
             self.last_normal = normal
 
         if not on_ground or controls.jump:
-            self._rlu_step(controls, dt, on_ground)
+            self._rlu_step(controls, dt, on_ground and not self.last_was_jump)
+            self.last_was_jump = controls.jump
             clamp(self.physics)
             return self.physics
 
+        # TODO: Special landing logic to maintain speed
+        if on_ground and self.airtime > 0:
+            # we are landing! lets give ourselves a nice landing
+            # NOT REALISTIC but that's not our goal anyways
+            # we want up = normal, and maintain all momentum in the appropriate direction
+            orientation = Orientation(self.physics.rotation)
+            self.physics.rotation = rotate_by_axis(orientation, orientation.up, normal)
+            orientation = Orientation(self.physics.rotation)
+            # now lets update the velocities
+            remove_velocity_against_normal(self.physics.velocity, normal)
+
+        self.last_was_jump = controls.jump
         self.is_rlu_updated = False
         orientation = Orientation(self.physics.rotation)
         # compare orientations
@@ -201,6 +223,7 @@ class CarSimmer:
             return stuck_on_ground(self.physics, controls, dt, result, self.renderer)
 
         self.physics.rotation = rotate_by_axis(orientation, orientation.up, normal)
+        self.physics.angular_velocity = Vec3(0, 0, 0)
 
         rotate_ground_and_move(self.physics, controls, dt, normal)
         clamp(self.physics)
@@ -320,9 +343,7 @@ def stuck_on_ground(
     normal_base = rlu_to_Vec3(collision.start)
 
     physics.velocity += Vec3(0, 0, -650 * dt)
-    normal_velo = physics.velocity.dot(normal * -1)
-    if normal_velo > 0:
-        physics.velocity -= normal * normal_velo
+    remove_velocity_against_normal(physics.velocity, normal)
     physics.location += physics.velocity * dt
 
     if (physics.location - normal_base).length() < height * 0.95:
@@ -336,18 +357,17 @@ def stuck_on_ground(
     clamp(physics)
     return physics
 
+def remove_velocity_against_normal(velocity, normal, factor=1):
+    normal_velo = velocity.dot(normal* -1)
+    if normal_velo > 0:
+        velocity -= (normal * normal_velo) * factor 
+
 
 def rotate_ground_and_move(
     physics: SimPhysics, controls: SimpleControllerState, dt: float, normal: Vec3
 ):
     physics.velocity += Vec3(0, 0, -650 * dt)
-    normal_velo = physics.velocity.dot(normal * -1)
-    if normal_velo > 0:
-        physics.velocity -= (normal * normal_velo) * dt
-
-    # steer may need to be rotated
-    # if physics.velocity.dot(orientation.forward) < 0:
-    # controls.steer = -controls.steer
+    remove_velocity_against_normal(physics.velocity, normal, dt)
 
     orientation = Orientation(physics.rotation)
     orig_rot_mat = orientation.to_rot_mat()

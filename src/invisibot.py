@@ -18,7 +18,7 @@ from rlbot.utils.game_state_util import GameState, CarState, Physics, Vector3, R
 from car_simulation_by_controls import SimPhysics, CarSimmer, Vec3
 
 DEBUG = True
-PROXIMITY = 2000
+PROXIMITY = 1000
 
 # To implement list:
 # - Reset between goals
@@ -62,6 +62,8 @@ class InvisibotWrapper(BaseBot):
         if not packet.game_info.is_round_active:
             self.__hidden = False
             self.__count = 0
+
+            self.__visible_timestamp = self.__timestamp # let kickoffs be in cooldown
             return emptry_controls
 
         packet_car = packet.game_cars[self.index]

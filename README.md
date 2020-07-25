@@ -27,12 +27,9 @@ give other bots invisibility powers. Here are the requirements:
 
 # Status
 
-The bot works, however it makes Kamael significantly worse. The biggest
-issue seems to be that the flip simulation is not behaving normally.
+The bot is working pretty well. Sometimes the simulation is not perfect and it results
+in the bot not being in the place that the "controlling" bot expects. This results in
+invisibot performing worse than the "controlling" bot. Since the controlling bot is
+Kamael though, a bad Kamael still performs pretty well.
 
 
-# To Dos:
-
-- Boost tracking
-- Update additional car fields  liked jumped and `wheel_on_ground`
-- Improve flip/dodge. Either the above issues are causing issues or we are over-correcting orientation on landing.
